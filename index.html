@@ -1,1548 +1,912 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ARC · Wallet Visualizer</title>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #050a0f;
-      --surface: #0c1520;
-      --surface2: #112030;
-      --border: #1a3045;
-      --accent: #00e5ff;
-      --accent2: #7b61ff;
-      --accent3: #ff6b35;
-      --text: #e0f0ff;
-      --muted: #4a7a99;
-      --success: #00ff9d;
-      --danger: #ff4444;
-      --font-mono: 'Space Mono', monospace;
-      --font-display: 'Syne', sans-serif;
-    }
-
-    html { scroll-behavior: smooth; }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font-mono);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* Animated grid background */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
-      background-size: 40px 40px;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    /* Glowing orbs */
-    body::after {
-      content: '';
-      position: fixed;
-      width: 600px; height: 600px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 70%);
-      top: -200px; right: -200px;
-      pointer-events: none;
-      z-index: 0;
-      animation: orb 8s ease-in-out infinite alternate;
-    }
-
-    @keyframes orb {
-      from { transform: translate(0,0) scale(1); }
-      to   { transform: translate(-60px, 80px) scale(1.1); }
-    }
-
-    /* ─── HEADER ─── */
-    header {
-      position: relative; z-index: 10;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 1.5rem 2.5rem;
-      border-bottom: 1px solid var(--border);
-      background: rgba(5,10,15,0.8);
-      backdrop-filter: blur(12px);
-    }
-
-    .logo {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: 1.4rem;
-      letter-spacing: -0.02em;
-      display: flex; align-items: center; gap: 0.6rem;
-    }
-
-    .logo-dot {
-      width: 10px; height: 10px;
-      background: var(--accent);
-      border-radius: 50%;
-      box-shadow: 0 0 12px var(--accent);
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%,100% { opacity: 1; transform: scale(1); }
-      50%      { opacity: 0.5; transform: scale(0.8); }
-    }
-
-    .badge {
-      font-size: 0.65rem;
-      padding: 0.2rem 0.6rem;
-      border: 1px solid var(--accent2);
-      color: var(--accent2);
-      border-radius: 20px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-    }
-
-    /* ─── HERO / SEARCH ─── */
-    .hero {
-      position: relative; z-index: 5;
-      text-align: center;
-      padding: 5rem 2rem 3rem;
-    }
-
-    .hero-eyebrow {
-      font-size: 0.7rem;
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 1rem;
-    }
-
-    .hero h1 {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: clamp(2rem, 6vw, 4.5rem);
-      line-height: 1.05;
-      letter-spacing: -0.03em;
-      margin-bottom: 1rem;
-    }
-
-    .hero h1 span {
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .hero p {
-      color: var(--muted);
-      font-size: 0.85rem;
-      margin-bottom: 2.5rem;
-    }
-
-    .search-wrap {
-      display: flex;
-      max-width: 680px;
-      margin: 0 auto;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      overflow: hidden;
-      background: var(--surface);
-      transition: border-color 0.2s;
-    }
-
-    .search-wrap:focus-within {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0,229,255,0.1);
-    }
-
-    .search-wrap input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: var(--text);
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      padding: 1rem 1.2rem;
-      letter-spacing: 0.02em;
-    }
-
-    .search-wrap input::placeholder { color: var(--muted); }
-
-    .search-wrap button {
-      background: var(--accent);
-      border: none;
-      color: var(--bg);
-      font-family: var(--font-display);
-      font-weight: 600;
-      font-size: 0.8rem;
-      padding: 0 1.8rem;
-      cursor: pointer;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      transition: background 0.2s, opacity 0.2s;
-    }
-
-    .search-wrap button:hover { opacity: 0.85; }
-
-    .demo-hint {
-      margin-top: 0.8rem;
-      font-size: 0.7rem;
-      color: var(--muted);
-    }
-
-    .demo-hint a {
-      color: var(--accent2);
-      cursor: pointer;
-      text-decoration: none;
-      border-bottom: 1px dashed var(--accent2);
-    }
-
-    /* ─── LOADING ─── */
-    #loading {
-      display: none;
-      text-align: center;
-      padding: 4rem;
-      position: relative; z-index: 5;
-    }
-
-    .spinner {
-      width: 48px; height: 48px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      margin: 0 auto 1rem;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .loading-text {
-      font-size: 0.75rem;
-      color: var(--muted);
-      letter-spacing: 0.1em;
-    }
-
-    /* ─── DASHBOARD ─── */
-    #dashboard {
-      display: none;
-      position: relative; z-index: 5;
-      padding: 0 2rem 4rem;
-      max-width: 1200px;
-      margin: 0 auto;
-      animation: fadeUp 0.5s ease forwards;
-    }
-
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Wallet identity strip */
-    .wallet-strip {
-      border: 1px solid var(--border);
-      background: var(--surface);
-      border-radius: 8px;
-      padding: 1.5rem 2rem;
-      margin-bottom: 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 1.5rem;
-      flex-wrap: wrap;
-    }
-
-    .wallet-avatar {
-      width: 52px; height: 52px;
-      border-radius: 50%;
-      background: conic-gradient(var(--accent), var(--accent2), var(--accent3), var(--accent));
-      flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.3rem;
-    }
-
-    .wallet-info { flex: 1; min-width: 200px; }
-
-    .wallet-addr {
-      font-size: 0.85rem;
-      color: var(--accent);
-      word-break: break-all;
-      margin-bottom: 0.3rem;
-    }
-
-    .wallet-meta {
-      font-size: 0.7rem;
-      color: var(--muted);
-      letter-spacing: 0.05em;
-    }
-
-    .wallet-network {
-      display: flex; align-items: center; gap: 0.4rem;
-      font-size: 0.7rem;
-      color: var(--success);
-      padding: 0.4rem 0.9rem;
-      border: 1px solid rgba(0,255,157,0.3);
-      border-radius: 20px;
-      background: rgba(0,255,157,0.05);
-    }
-
-    .net-dot {
-      width: 6px; height: 6px;
-      background: var(--success);
-      border-radius: 50%;
-      box-shadow: 0 0 6px var(--success);
-    }
-
-    /* Stats grid */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.3rem 1.5rem;
-      position: relative;
-      overflow: hidden;
-      transition: border-color 0.2s, transform 0.2s;
-    }
-
-    .stat-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
-    }
-
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, var(--accent), var(--accent2));
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-
-    .stat-card:hover::before { opacity: 1; }
-
-    .stat-label {
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--muted);
-      margin-bottom: 0.5rem;
-    }
-
-    .stat-value {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: 1.8rem;
-      letter-spacing: -0.02em;
-      line-height: 1;
-    }
-
-    .stat-sub {
-      font-size: 0.65rem;
-      color: var(--muted);
-      margin-top: 0.4rem;
-    }
-
-    .stat-accent { color: var(--accent); }
-    .stat-green  { color: var(--success); }
-    .stat-purple { color: var(--accent2); }
-    .stat-orange { color: var(--accent3); }
-
-    /* Two-col layout */
-    .two-col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-
-    @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
-
-    /* Panel */
-    .panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .panel-header {
-      padding: 1rem 1.5rem;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .panel-title {
-      font-family: var(--font-display);
-      font-weight: 600;
-      font-size: 0.85rem;
-      letter-spacing: 0.02em;
-    }
-
-    .panel-tag {
-      font-size: 0.6rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      padding: 0.2rem 0.6rem;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-    }
-
-    .panel-body { padding: 1.5rem; }
-
-    /* Chart */
-    .chart-wrap {
-      position: relative;
-      height: 180px;
-    }
-
-    /* Token list */
-    .token-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.8rem 0;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .token-item:last-child { border-bottom: none; }
-
-    .token-left { display: flex; align-items: center; gap: 0.8rem; }
-
-    .token-icon {
-      width: 32px; height: 32px;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.8rem;
-      font-weight: 700;
-      flex-shrink: 0;
-    }
-
-    .token-name { font-size: 0.8rem; }
-    .token-sym  { font-size: 0.65rem; color: var(--muted); }
-
-    .token-amount {
-      font-size: 0.8rem;
-      font-family: var(--font-display);
-      font-weight: 600;
-      text-align: right;
-    }
-
-    .token-val { font-size: 0.65rem; color: var(--muted); }
-
-    /* Transaction table */
-    .tx-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    .tx-table th {
-      font-size: 0.6rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      text-align: left;
-      padding: 0.6rem 1rem;
-      border-bottom: 1px solid var(--border);
-      background: rgba(255,255,255,0.02);
-    }
-
-    .tx-table td {
-      padding: 0.9rem 1rem;
-      font-size: 0.75rem;
-      border-bottom: 1px solid rgba(26,48,69,0.5);
-      vertical-align: middle;
-    }
-
-    .tx-table tr:last-child td { border-bottom: none; }
-
-    .tx-table tr:hover td { background: rgba(0,229,255,0.03); }
-
-    .tx-hash {
-      color: var(--accent);
-      font-size: 0.7rem;
-      cursor: pointer;
-    }
-
-    .tx-type {
-      display: inline-block;
-      padding: 0.2rem 0.6rem;
-      border-radius: 4px;
-      font-size: 0.65rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .type-send    { background: rgba(255,107,53,0.15); color: var(--accent3); }
-    .type-receive { background: rgba(0,255,157,0.15);  color: var(--success); }
-    .type-contract{ background: rgba(123,97,255,0.15); color: var(--accent2); }
-    .type-swap    { background: rgba(0,229,255,0.15);  color: var(--accent); }
-
-    .tx-status-ok {
-      display: inline-block;
-      width: 6px; height: 6px;
-      background: var(--success);
-      border-radius: 50%;
-      box-shadow: 0 0 4px var(--success);
-    }
-
-    /* Activity heatmap */
-    .heatmap {
-      display: grid;
-      grid-template-columns: repeat(24, 1fr);
-      gap: 3px;
-    }
-
-    .heat-cell {
-      aspect-ratio: 1;
-      border-radius: 2px;
-      background: var(--border);
-      transition: background 0.3s, transform 0.2s;
-      cursor: default;
-    }
-
-    .heat-cell:hover { transform: scale(1.4); }
-    .heat-0 { background: var(--border); }
-    .heat-1 { background: rgba(0,229,255,0.2); }
-    .heat-2 { background: rgba(0,229,255,0.4); }
-    .heat-3 { background: rgba(0,229,255,0.6); }
-    .heat-4 { background: rgba(0,229,255,0.85); box-shadow: 0 0 6px rgba(0,229,255,0.4); }
-
-    .heatmap-labels {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 0.5rem;
-      font-size: 0.6rem;
-      color: var(--muted);
-    }
-
-    /* Donut chart container */
-    .donut-wrap {
-      position: relative;
-      width: 140px;
-      height: 140px;
-      margin: 0 auto 1rem;
-    }
-
-    /* Footer */
-    footer {
-      position: relative; z-index: 5;
-      text-align: center;
-      padding: 2rem;
-      border-top: 1px solid var(--border);
-      font-size: 0.65rem;
-      color: var(--muted);
-      letter-spacing: 0.08em;
-    }
-
-    footer span { color: var(--accent); }
-
-    /* ─── GM BUTTON ─── */
-    .gm-panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.8rem 2rem;
-      margin-bottom: 1.5rem;
-      margin-top: 1.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1.5rem;
-      flex-wrap: wrap;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .gm-panel::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(ellipse at 0% 50%, rgba(255,210,0,0.04) 0%, transparent 60%);
-      pointer-events: none;
-    }
-
-    .gm-left { flex: 1; min-width: 200px; }
-
-    .gm-eyebrow {
-      font-size: 0.6rem;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: var(--muted);
-      margin-bottom: 0.4rem;
-    }
-
-    .gm-title {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: 1.1rem;
-      margin-bottom: 0.3rem;
-    }
-
-    .gm-title span { color: #ffd200; }
-
-    .gm-desc {
-      font-size: 0.7rem;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-
-    .gm-center {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .gm-btn {
-      position: relative;
-      background: linear-gradient(135deg, #ffd200, #ff8c00);
-      border: none;
-      border-radius: 8px;
-      color: #0a0500;
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: 1.1rem;
-      letter-spacing: 0.05em;
-      padding: 0.9rem 2.4rem;
-      cursor: pointer;
-      transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
-      box-shadow: 0 0 20px rgba(255,210,0,0.25);
-      overflow: hidden;
-    }
-
-    .gm-btn::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, rgba(255,255,255,0.2), transparent);
-      pointer-events: none;
-    }
-
-    .gm-btn:hover:not(:disabled) {
-      transform: translateY(-2px) scale(1.02);
-      box-shadow: 0 0 32px rgba(255,210,0,0.4);
-    }
-
-    .gm-btn:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
-    .gm-btn:disabled {
-      background: linear-gradient(135deg, #4a4a2a, #3a3010);
-      color: #888;
-      cursor: not-allowed;
-      box-shadow: none;
-    }
-
-    .gm-btn-shimmer {
-      animation: shimmer 2s ease-in-out infinite;
-    }
-
-    @keyframes shimmer {
-      0%,100% { box-shadow: 0 0 20px rgba(255,210,0,0.25); }
-      50%      { box-shadow: 0 0 36px rgba(255,210,0,0.5); }
-    }
-
-    .gm-cooldown {
-      font-size: 0.65rem;
-      color: var(--muted);
-      text-align: center;
-      letter-spacing: 0.05em;
-      min-height: 1rem;
-    }
-
-    .gm-right {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.3rem;
-      padding: 1rem 1.5rem;
-      border: 1px solid rgba(255,210,0,0.2);
-      border-radius: 8px;
-      background: rgba(255,210,0,0.04);
-      min-width: 110px;
-    }
-
-    .gm-count-label {
-      font-size: 0.6rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--muted);
-    }
-
-    .gm-count {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: 2.4rem;
-      color: #ffd200;
-      line-height: 1;
-      transition: transform 0.2s;
-    }
-
-    .gm-count.pop {
-      animation: countPop 0.3s ease;
-    }
-
-    @keyframes countPop {
-      0%   { transform: scale(1); }
-      50%  { transform: scale(1.35); }
-      100% { transform: scale(1); }
-    }
-
-    .gm-streak {
-      font-size: 0.65rem;
-      color: #ff8c00;
-    }
-
-    /* GM toast notification */
-    .gm-toast {
-      position: fixed;
-      bottom: 2rem;
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: var(--surface);
-      border: 1px solid rgba(255,210,0,0.4);
-      border-radius: 8px;
-      padding: 0.9rem 1.6rem;
-      font-size: 0.8rem;
-      color: #ffd200;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,210,0,0.1);
-      z-index: 9999;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s, transform 0.3s;
-      white-space: nowrap;
-    }
-
-    .gm-toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-
-    /* GM tx row highlight */
-    .gm-tx-row td { background: rgba(255,210,0,0.04) !important; }
-    .type-gm {
-      display: inline-block;
-      padding: 0.2rem 0.6rem;
-      border-radius: 4px;
-      font-size: 0.65rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      background: rgba(255,210,0,0.15);
-      color: #ffd200;
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ArcScan · Wallet Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050a0f;--surface:#0c1520;--border:#1a3045;
+  --accent:#00e5ff;--accent2:#7b61ff;--accent3:#ff6b35;
+  --text:#e0f0ff;--muted:#4a7a99;--success:#00ff9d;--danger:#ff4444;
+  --gold:#ffd200;
+  --mono:'Space Mono',monospace;--display:'Syne',sans-serif;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+header{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:1.2rem 2rem;border-bottom:1px solid var(--border);background:rgba(5,10,15,.9);backdrop-filter:blur(12px)}
+.logo{font-family:var(--display);font-weight:800;font-size:1.3rem;display:flex;align-items:center;gap:.5rem}
+.logo-dot{width:10px;height:10px;background:var(--accent);border-radius:50%;box-shadow:0 0 12px var(--accent);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.badge{font-size:.65rem;padding:.2rem .6rem;border:1px solid var(--accent2);color:var(--accent2);border-radius:20px;letter-spacing:.1em;text-transform:uppercase}
+.hero{position:relative;z-index:5;text-align:center;padding:4rem 2rem 2rem}
+.hero-eyebrow{font-size:.7rem;letter-spacing:.25em;text-transform:uppercase;color:var(--accent);margin-bottom:.8rem}
+.hero h1{font-family:var(--display);font-weight:800;font-size:clamp(1.8rem,5vw,3.8rem);line-height:1.05;letter-spacing:-.03em;margin-bottom:.8rem}
+.hero h1 span{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{color:var(--muted);font-size:.82rem;margin-bottom:2rem}
+.search-wrap{display:flex;max-width:720px;margin:0 auto;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--surface);transition:border-color .2s}
+.search-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,229,255,.1)}
+.search-wrap input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--mono);font-size:.8rem;padding:.9rem 1rem}
+.search-wrap input::placeholder{color:var(--muted)}
+.search-wrap button{background:var(--accent);border:none;color:#030a0f;font-family:var(--display);font-weight:700;font-size:.8rem;padding:0 1.6rem;cursor:pointer;text-transform:uppercase;letter-spacing:.05em;transition:opacity .2s;white-space:nowrap}
+.search-wrap button:hover{opacity:.85}
+.demo-hint{margin-top:.6rem;font-size:.7rem;color:var(--muted)}
+.demo-hint a{color:var(--accent2);cursor:pointer;border-bottom:1px dashed var(--accent2);text-decoration:none}
+
+/* GM */
+.gm-section{max-width:1200px;margin:1.5rem auto 0;padding:0 2rem;position:relative;z-index:5}
+.gm-panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.6rem 2rem;display:flex;align-items:center;justify-content:space-between;gap:1.5rem;flex-wrap:wrap;position:relative;overflow:hidden}
+.gm-panel::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 0 50%,rgba(255,210,0,.05),transparent 60%);pointer-events:none}
+.gm-left{flex:1;min-width:200px}
+.gm-eyebrow{font-size:.6rem;text-transform:uppercase;letter-spacing:.15em;color:var(--muted);margin-bottom:.3rem}
+.gm-title{font-family:var(--display);font-weight:800;font-size:1.05rem;margin-bottom:.25rem}
+.gm-title em{color:var(--gold);font-style:normal}
+.gm-desc{font-size:.7rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem}
+.cal-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:.4rem}
+.streak-cal{display:flex;gap:4px}
+.cal-day{display:flex;flex-direction:column;align-items:center;gap:3px}
+.cal-cell{width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:.68rem}
+.cal-dlabel{font-size:.52rem;color:var(--muted)}
+.gm-center{display:flex;flex-direction:column;align-items:center;gap:.4rem}
+.gm-btn{background:linear-gradient(135deg,#ffd200,#ff8c00);border:none;border-radius:8px;color:#0a0500;font-family:var(--display);font-weight:800;font-size:1.05rem;padding:.85rem 2.2rem;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:0 0 20px rgba(255,210,0,.25);letter-spacing:.05em}
+.gm-btn:hover:not(:disabled){transform:translateY(-2px) scale(1.03);box-shadow:0 0 32px rgba(255,210,0,.45)}
+.gm-btn:active:not(:disabled){transform:scale(.97)}
+.gm-btn:disabled{background:linear-gradient(135deg,#4a4a2a,#3a3010);color:#888;cursor:not-allowed;box-shadow:none}
+.shimmer{animation:shimmer 2s ease-in-out infinite}
+@keyframes shimmer{0%,100%{box-shadow:0 0 20px rgba(255,210,0,.25)}50%{box-shadow:0 0 36px rgba(255,210,0,.5)}}
+.gm-cooldown{font-size:.65rem;color:var(--muted);text-align:center;letter-spacing:.04em;min-height:.9rem}
+.gm-right{display:flex;flex-direction:column;align-items:center;gap:.2rem;padding:.9rem 1.4rem;border:1px solid rgba(255,210,0,.2);border-radius:8px;background:rgba(255,210,0,.04);min-width:100px}
+.gm-count-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.gm-count{font-family:var(--display);font-weight:800;font-size:2.2rem;color:var(--gold);line-height:1}
+.gm-count.pop{animation:countPop .3s ease}
+@keyframes countPop{0%{transform:scale(1)}50%{transform:scale(1.4)}100%{transform:scale(1)}}
+.gm-streak-txt{font-size:.65rem;color:#ff8c00}
+.gm-best{font-size:.6rem;color:var(--muted);margin-top:.3rem}
+.gm-toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid rgba(255,210,0,.4);border-radius:8px;padding:.8rem 1.5rem;font-size:.78rem;color:var(--gold);box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:9999;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;white-space:nowrap}
+.gm-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* LOADING */
+#loading{display:none;position:relative;z-index:5;text-align:center;padding:3rem 2rem}
+.spinner{width:44px;height:44px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto .8rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loadingText{font-size:.72rem;color:var(--muted);letter-spacing:.06em;max-width:560px;margin:.5rem auto;line-height:1.7;white-space:pre-line}
+
+/* DASHBOARD */
+#dashboard{display:none;position:relative;z-index:5;padding:0 2rem 4rem;max-width:1200px;margin:0 auto;animation:fadeUp .4s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.wallet-strip{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.3rem 1.8rem;margin-bottom:1.2rem;display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap}
+.wallet-avatar{width:48px;height:48px;border-radius:50%;background:conic-gradient(var(--accent),var(--accent2),var(--accent3),var(--accent));flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.2rem}
+.wallet-info{flex:1;min-width:180px}
+.wallet-addr{font-size:.8rem;color:var(--accent);word-break:break-all;margin-bottom:.2rem}
+.wallet-meta{font-size:.67rem;color:var(--muted)}
+.net-badge{display:flex;align-items:center;gap:.35rem;font-size:.68rem;padding:.35rem .85rem;border-radius:20px}
+.net-dot{width:6px;height:6px;border-radius:50%}
+.net-live{color:var(--success);border:1px solid rgba(0,255,157,.3);background:rgba(0,255,157,.05)}
+.net-live .net-dot{background:var(--success);box-shadow:0 0 6px var(--success)}
+.net-demo{color:var(--gold);border:1px solid rgba(255,210,0,.3);background:rgba(255,210,0,.05)}
+.net-demo .net-dot{background:var(--gold)}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:1rem;margin-bottom:1.2rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;position:relative;overflow:hidden;transition:border-color .2s,transform .2s;cursor:default}
+.stat-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));opacity:0;transition:opacity .2s}
+.stat-card:hover::before{opacity:1}
+.stat-label{font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:.4rem}
+.stat-value{font-family:var(--display);font-weight:800;font-size:1.6rem;letter-spacing:-.02em;line-height:1}
+.stat-sub{font-size:.62rem;color:var(--muted);margin-top:.3rem}
+.c-cyan{color:var(--accent)}.c-green{color:var(--success)}.c-orange{color:var(--accent3)}.c-purple{color:var(--accent2)}.c-gold{color:var(--gold)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-bottom:1.2rem}
+@media(max-width:720px){.two-col{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.panel-head{padding:.9rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.panel-title{font-family:var(--display);font-weight:600;font-size:.83rem}
+.panel-tag{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:.18rem .55rem;border:1px solid var(--border);border-radius:4px}
+.panel-body{padding:1.2rem}
+.chart-wrap{position:relative;height:175px}
+.token-row{display:flex;align-items:center;justify-content:space-between;padding:.7rem 0;border-bottom:1px solid var(--border)}
+.token-row:last-child{border-bottom:none}
+.tok-left{display:flex;align-items:center;gap:.7rem}
+.tok-icon{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700;flex-shrink:0}
+.tok-name{font-size:.78rem}.tok-sym{font-size:.62rem;color:var(--muted)}
+.tok-amt{font-family:var(--display);font-weight:600;font-size:.8rem;text-align:right}
+.tok-note{font-size:.58rem;color:var(--muted)}
+.heatmap{display:grid;grid-template-columns:repeat(24,1fr);gap:3px}
+.heat-cell{aspect-ratio:1;border-radius:2px}
+.h0{background:var(--border)}.h1{background:rgba(0,229,255,.2)}.h2{background:rgba(0,229,255,.4)}.h3{background:rgba(0,229,255,.65)}.h4{background:rgba(0,229,255,.9);box-shadow:0 0 4px rgba(0,229,255,.4)}
+.hm-labels{display:flex;justify-content:space-between;margin-top:.4rem;font-size:.58rem;color:var(--muted)}
+.tx-panel{margin-bottom:1.2rem}
+.tx-scroll{overflow-x:auto}
+.tx-table{width:100%;border-collapse:collapse}
+.tx-table th{font-size:.6rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);text-align:left;padding:.55rem .9rem;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);white-space:nowrap}
+.tx-table td{padding:.78rem .9rem;font-size:.73rem;border-bottom:1px solid rgba(26,48,69,.5);vertical-align:middle}
+.tx-table tr:last-child td{border-bottom:none}
+.tx-table tr:hover td{background:rgba(0,229,255,.025)}
+.tx-hash{color:var(--accent);font-size:.68rem;text-decoration:none}
+.tx-hash:hover{text-decoration:underline}
+.badge-type{display:inline-block;padding:.18rem .55rem;border-radius:4px;font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.t-send{background:rgba(255,107,53,.15);color:var(--accent3)}
+.t-receive{background:rgba(0,255,157,.15);color:var(--success)}
+.t-contract{background:rgba(123,97,255,.15);color:var(--accent2)}
+.t-approve{background:rgba(255,210,0,.15);color:var(--gold)}
+.t-gm{background:rgba(255,210,0,.12);color:var(--gold)}
+.tx-ok{display:inline-block;width:6px;height:6px;background:var(--success);border-radius:50%;box-shadow:0 0 4px var(--success)}
+.tx-time{color:var(--muted);font-size:.66rem;white-space:nowrap}
+.gm-row td{background:rgba(255,210,0,.03)!important}
+footer{position:relative;z-index:5;padding:2rem;border-top:1px solid var(--border);text-align:center}
+.creator-card{display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;justify-content:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.8rem;max-width:700px;margin:0 auto 1rem}
+.creator-avatar{width:40px;height:40px;border-radius:50%;background:conic-gradient(var(--accent),var(--accent2),var(--accent3),var(--accent));display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.creator-info{text-align:left;flex:1;min-width:140px}
+.creator-name{font-family:var(--display);font-weight:700;font-size:.78rem;margin-bottom:.1rem}
+.creator-sub{font-size:.6rem;color:var(--muted)}
+.socials{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+.social-chip{display:flex;align-items:center;gap:.35rem;padding:.3rem .75rem;border-radius:6px;font-size:.67rem;text-decoration:none;transition:background .2s;cursor:pointer}
+.chip-discord{background:rgba(88,101,242,.12);border:1px solid rgba(88,101,242,.3);color:#7289da}
+.chip-x{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:var(--text)}
+.chip-x:hover{background:rgba(255,255,255,.1)}
+.chip-wallet{background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);color:var(--accent)}
+.chip-wallet:hover{background:rgba(0,229,255,.12)}
+.footer-note{font-size:.6rem;color:var(--muted);letter-spacing:.06em}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+</style>
 </head>
 <body>
 
-<!-- HEADER -->
 <header>
-  <div class="logo">
-    <div class="logo-dot"></div>
-    ARC<span style="color:var(--accent)">SCAN</span>
-  </div>
+  <div class="logo"><div class="logo-dot"></div>ARC<span style="color:var(--accent)">SCAN</span></div>
   <div class="badge">Testnet</div>
 </header>
 
-<!-- HERO / SEARCH -->
 <section class="hero">
   <p class="hero-eyebrow">Arc Testnet · Wallet Explorer</p>
   <h1>Visualize Any<br><span>Wallet Activity</span></h1>
-  <p>Paste a wallet address to explore transactions, balances & on-chain activity</p>
-
+  <p>Real on-chain data — full USDC, EURC &amp; USYC transaction history with live balances</p>
   <div class="search-wrap">
-    <input id="walletInput" type="text" placeholder="0x... enter wallet address" spellcheck="false"/>
-    <button onclick="loadWallet()">Analyze →</button>
+    <input id="addrInput" type="text" placeholder="0x… paste your Arc Testnet wallet address" spellcheck="false"/>
+    <button onclick="analyzeWallet()">Analyze →</button>
   </div>
-
-  <p class="demo-hint">
-    No wallet? <a onclick="loadDemo()">Load demo wallet</a> to see a preview
-  </p>
+  <p class="demo-hint">No wallet? <a onclick="loadDemo()">Load demo wallet</a></p>
 </section>
 
-<!-- LOADING -->
-<div id="loading">
-  <div class="spinner"></div>
-  <p class="loading-text">FETCHING ON-CHAIN DATA...</p>
-</div>
-
-<!-- GM PANEL — always visible -->
-<div style="max-width:1200px;margin:0 auto;padding:0 2rem;">
-  <div class="gm-panel" id="gmSection">
+<!-- GM — always visible -->
+<div class="gm-section">
+  <div class="gm-panel">
     <div class="gm-left">
       <div class="gm-eyebrow">Daily On-Chain Action</div>
-      <div class="gm-title">Say <span>GM</span> to the World 🌅</div>
-      <div class="gm-desc">Send a GM transaction to Arc Testnet once per day.<br>Each GM counts as a real transaction and builds your streak.</div>
-      <div style="margin-top:1rem;">
-        <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);margin-bottom:0.5rem;">Last 7 Days</div>
-        <div id="streakCalendar" style="display:flex;gap:5px;"></div>
-      </div>
+      <div class="gm-title">Say <em>GM</em> to the World 🌅</div>
+      <div class="gm-desc">One GM per day. Recorded on-chain. Builds your streak.</div>
+      <div class="cal-label">Last 7 Days</div>
+      <div class="streak-cal" id="streakCal"></div>
     </div>
     <div class="gm-center">
-      <button class="gm-btn gm-btn-shimmer" id="gmBtn" onclick="sendGM()">☀️ GM</button>
-      <div class="gm-cooldown" id="gmCooldown">Load a wallet first to enable GM</div>
+      <button class="gm-btn shimmer" id="gmBtn" onclick="sendGM()">☀️ GM</button>
+      <div class="gm-cooldown" id="gmCooldown">Send your daily GM!</div>
     </div>
     <div class="gm-right">
       <div class="gm-count-label">Total GMs</div>
       <div class="gm-count" id="gmCount">0</div>
-      <div class="gm-streak" id="gmStreak">🔥 0 day streak</div>
-      <div style="margin-top:0.6rem;font-size:0.6rem;color:var(--muted);">Best: <span id="gmBest" style="color:#ffd200">0</span></div>
+      <div class="gm-streak-txt" id="gmStreak">🔥 0 day streak</div>
+      <div class="gm-best">Best: <span id="gmBest" style="color:var(--gold)">0</span></div>
     </div>
   </div>
 </div>
 
-<!-- DASHBOARD -->
-<div id="dashboard">
+<div id="loading">
+  <div class="spinner"></div>
+  <div id="loadingText">Connecting to Arc Testnet...</div>
+</div>
 
-  <!-- Wallet strip -->
+<div id="dashboard">
   <div class="wallet-strip">
     <div class="wallet-avatar">⬡</div>
     <div class="wallet-info">
-      <div class="wallet-addr" id="displayAddr">0x...</div>
-      <div class="wallet-meta" id="displayMeta">Arc Testnet · Last active: —</div>
+      <div class="wallet-addr" id="dispAddr">—</div>
+      <div class="wallet-meta" id="dispMeta">—</div>
     </div>
-    <div class="wallet-network">
-      <div class="net-dot"></div>
-      Arc Testnet
-    </div>
+    <div class="net-badge net-live" id="netBadge"><div class="net-dot"></div><span id="netLabel">Arc Testnet · Live</span></div>
   </div>
 
-  <!-- Stats -->
   <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-label">Total Transactions</div>
-      <div class="stat-value stat-accent" id="stat-txCount">—</div>
-      <div class="stat-sub" id="stat-txSub">—</div>
+    <div class="stat-card"><div class="stat-label">Transactions</div><div class="stat-value c-cyan" id="sTxFound">—</div><div class="stat-sub" id="sTxSub">ERC-20 transfers</div></div>
+    <div class="stat-card"><div class="stat-label">USDC Balance</div><div class="stat-value c-green" id="sBalance">—</div><div class="stat-sub">Native Arc token</div></div>
+    <div class="stat-card"><div class="stat-label">Total Sent</div><div class="stat-value c-orange" id="sSent">—</div><div class="stat-sub" id="sSentSub">all tokens</div></div>
+    <div class="stat-card"><div class="stat-label">Total Received</div><div class="stat-value c-purple" id="sReceived">—</div><div class="stat-sub">all tokens</div></div>
+    <div class="stat-card"><div class="stat-label">GM Streak</div><div class="stat-value c-gold" id="sGmStreak">0</div><div class="stat-sub">days in a row</div></div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Transaction Volume</div><div class="panel-tag">30 days</div></div>
+      <div class="panel-body"><div class="chart-wrap"><canvas id="volChart"></canvas></div></div>
     </div>
-    <div class="stat-card">
-      <div class="stat-label">ARC Balance</div>
-      <div class="stat-value stat-green" id="stat-balance">—</div>
-      <div class="stat-sub">Native token</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Total Sent</div>
-      <div class="stat-value stat-orange" id="stat-sent">—</div>
-      <div class="stat-sub" id="stat-sentSub">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Contracts Touched</div>
-      <div class="stat-value stat-purple" id="stat-contracts">—</div>
-      <div class="stat-sub">unique interactions</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">GM Streak</div>
-      <div class="stat-value" id="stat-gmstreak" style="color:#ffd200">0</div>
-      <div class="stat-sub" id="stat-gmstreaksub">days in a row</div>
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Activity Breakdown</div><div class="panel-tag">by type</div></div>
+      <div class="panel-body"><div class="chart-wrap"><canvas id="typeChart"></canvas></div></div>
     </div>
   </div>
 
-  <!-- Charts row -->
-  <div class="two-col">
-
-    <!-- Tx Over Time -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">Transaction Volume</div>
-        <div class="panel-tag">30 days</div>
-      </div>
-      <div class="panel-body">
-        <div class="chart-wrap">
-          <canvas id="txChart"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <!-- Activity Breakdown -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">Activity Breakdown</div>
-        <div class="panel-tag">by type</div>
-      </div>
-      <div class="panel-body">
-        <div class="chart-wrap">
-          <canvas id="typeChart"></canvas>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Heatmap + Tokens -->
   <div class="two-col">
     <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">24h Activity Heatmap</div>
-        <div class="panel-tag">last 7 days</div>
-      </div>
+      <div class="panel-head"><div class="panel-title">24h Activity Heatmap</div><div class="panel-tag">last 7 days</div></div>
       <div class="panel-body">
         <div class="heatmap" id="heatmap"></div>
-        <div class="heatmap-labels">
-          <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:59</span>
-        </div>
+        <div class="hm-labels"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:59</span></div>
       </div>
     </div>
-
     <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">Token Holdings</div>
-        <div class="panel-tag">ERC-20</div>
-      </div>
-      <div class="panel-body" id="tokenList" style="padding-top:0.5rem"></div>
+      <div class="panel-head"><div class="panel-title">Token Balances</div><div class="panel-tag">Arc Testnet</div></div>
+      <div class="panel-body" id="tokenList" style="padding-top:.4rem"></div>
     </div>
   </div>
 
-  <!-- Transaction history -->
-  <div class="panel">
-    <div class="panel-header">
-      <div class="panel-title">Recent Transactions</div>
-      <div class="panel-tag" id="txCountLabel">—</div>
+  <div class="panel tx-panel">
+    <div class="panel-head">
+      <div class="panel-title">Full Transaction History</div>
+      <div class="panel-tag" id="txCountTag">—</div>
     </div>
-    <div style="overflow-x:auto">
+    <div class="tx-scroll">
       <table class="tx-table">
-        <thead>
-          <tr>
-            <th>Hash</th>
-            <th>Type</th>
-            <th>From / To</th>
-            <th>Value</th>
-            <th>Gas</th>
-            <th>Age</th>
-            <th>Status</th>
-          </tr>
-        </thead>
+        <thead><tr>
+          <th>Tx Hash</th><th>Type</th><th>Token</th>
+          <th>From</th><th>To</th><th>Amount</th>
+          <th>Date &amp; Time</th><th>Status</th>
+        </tr></thead>
         <tbody id="txBody"></tbody>
       </table>
     </div>
   </div>
-
 </div>
 
-<!-- FOOTER -->
 <footer>
-  <div style="display:flex;flex-direction:column;align-items:center;gap:1.2rem;max-width:700px;margin:0 auto;">
-
-    <!-- Creator card -->
-    <div style="
-      display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;justify-content:center;
-      background:var(--surface);border:1px solid var(--border);border-radius:10px;
-      padding:1.2rem 2rem;width:100%;
-    ">
-      <div style="
-        width:42px;height:42px;border-radius:50%;flex-shrink:0;
-        background:conic-gradient(var(--accent),var(--accent2),var(--accent3),var(--accent));
-        display:flex;align-items:center;justify-content:center;font-size:1.1rem;
-      ">⚡</div>
-
-      <div style="text-align:left;flex:1;min-width:160px;">
-        <div style="font-family:var(--font-display);font-weight:700;font-size:0.8rem;color:var(--text);margin-bottom:0.15rem;">
-          Built by <span style="color:var(--accent)">BoldTV</span>
-        </div>
-        <div style="font-size:0.62rem;color:var(--muted);letter-spacing:0.04em;">Creator · Arc Testnet</div>
-      </div>
-
-      <div style="display:flex;gap:0.7rem;flex-wrap:wrap;align-items:center;justify-content:center;">
-        <!-- Discord -->
-        <div style="
-          display:flex;align-items:center;gap:0.4rem;
-          padding:0.35rem 0.85rem;border-radius:6px;
-          background:rgba(88,101,242,0.12);border:1px solid rgba(88,101,242,0.3);
-          font-size:0.68rem;color:#7289da;
-        ">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.492c-1.53-.69-3.17-1.2-4.885-1.49a.075.075 0 0 0-.079.036c-.21.369-.444.85-.608 1.23a18.566 18.566 0 0 0-5.487 0 12.36 12.36 0 0 0-.617-1.23A.077.077 0 0 0 8.562 3c-1.714.29-3.354.8-4.885 1.491a.07.07 0 0 0-.032.027C.533 9.093-.32 13.555.099 17.961a.08.08 0 0 0 .031.055 20.03 20.03 0 0 0 5.993 2.98.078.078 0 0 0 .084-.026c.462-.62.874-1.275 1.226-1.963a.074.074 0 0 0-.041-.104 13.201 13.201 0 0 1-1.872-.878.075.075 0 0 1-.008-.125c.126-.093.252-.19.372-.287a.075.075 0 0 1 .078-.01c3.927 1.764 8.18 1.764 12.061 0a.075.075 0 0 1 .079.009c.12.098.245.195.372.288a.075.075 0 0 1-.006.125c-.598.344-1.22.635-1.873.877a.075.075 0 0 0-.041.105c.36.687.772 1.341 1.225 1.962a.077.077 0 0 0 .084.028 19.963 19.963 0 0 0 6.002-2.981.076.076 0 0 0 .032-.054c.5-5.094-.838-9.52-3.549-13.442a.06.06 0 0 0-.031-.028z"/></svg>
-          @boldtv.
-        </div>
-
-        <!-- X / Twitter -->
-        <a href="https://x.com/BoldTV393558" target="_blank" rel="noopener" style="
-          display:flex;align-items:center;gap:0.4rem;text-decoration:none;
-          padding:0.35rem 0.85rem;border-radius:6px;
-          background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
-          font-size:0.68rem;color:var(--text);transition:border-color 0.2s,background 0.2s;
-        " onmouseover="this.style.borderColor='rgba(255,255,255,0.3)';this.style.background='rgba(255,255,255,0.09)'"
-           onmouseout="this.style.borderColor='rgba(255,255,255,0.12)';this.style.background='rgba(255,255,255,0.05)'">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.263 5.632L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-          @BoldTV393558
-        </a>
-
-        <!-- Wallet -->
-        <div
-          onclick="navigator.clipboard&&navigator.clipboard.writeText('0x22b60210722FDd302E7784d26c3C7D69e4256d3C').then(()=>{this.textContent='✅ Copied!';setTimeout(()=>{this.innerHTML='<span style=\'color:var(--muted)\'>0x22b6…6d3C</span>';},1500)})"
-          style="
-            padding:0.35rem 0.85rem;border-radius:6px;cursor:pointer;
-            background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.2);
-            font-size:0.68rem;color:var(--accent);transition:background 0.2s;
-          "
-          onmouseover="this.style.background='rgba(0,229,255,0.12)'"
-          onmouseout="this.style.background='rgba(0,229,255,0.06)'"
-          title="0x22b60210722FDd302E7784d26c3C7D69e4256d3C"
-        ><span style="color:var(--muted)">0x22b6…6d3C</span></div>
-      </div>
+  <div class="creator-card">
+    <div class="creator-avatar">⚡</div>
+    <div class="creator-info">
+      <div class="creator-name">Built by <span style="color:var(--accent)">BoldTV</span></div>
+      <div class="creator-sub">Creator · Arc Testnet</div>
     </div>
-
-    <div style="font-size:0.6rem;color:var(--muted);letter-spacing:0.08em;">
-      Built on <span style="color:var(--accent)">Arc Testnet</span> · Wallet Activity Visualizer · Data is simulated for demo purposes
+    <div class="socials">
+      <div class="social-chip chip-discord">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.492c-1.53-.69-3.17-1.2-4.885-1.49a.075.075 0 0 0-.079.036c-.21.369-.444.85-.608 1.23a18.566 18.566 0 0 0-5.487 0 12.36 12.36 0 0 0-.617-1.23A.077.077 0 0 0 8.562 3c-1.714.29-3.354.8-4.885 1.491a.07.07 0 0 0-.032.027C.533 9.093-.32 13.555.099 17.961a.08.08 0 0 0 .031.055 20.03 20.03 0 0 0 5.993 2.98.078.078 0 0 0 .084-.026c.462-.62.874-1.275 1.226-1.963a.074.074 0 0 0-.041-.104 13.201 13.201 0 0 1-1.872-.878.075.075 0 0 1-.008-.125c.126-.093.252-.19.372-.287a.075.075 0 0 1 .078-.01c3.927 1.764 8.18 1.764 12.061 0a.075.075 0 0 1 .079.009c.12.098.245.195.372.288a.075.075 0 0 1-.006.125c-.598.344-1.22.635-1.873.877a.075.075 0 0 0-.041.105c.36.687.772 1.341 1.225 1.962a.077.077 0 0 0 .084.028 19.963 19.963 0 0 0 6.002-2.981.076.076 0 0 0 .032-.054c.5-5.094-.838-9.52-3.549-13.442a.06.06 0 0 0-.031-.028z"/></svg>
+        @boldtv.
+      </div>
+      <a href="https://x.com/BoldTV393558" target="_blank" rel="noopener" class="social-chip chip-x">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.263 5.632L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        @BoldTV393558
+      </a>
+      <div class="social-chip chip-wallet"
+        onclick="navigator.clipboard&&navigator.clipboard.writeText('0x22b60210722FDd302E7784d26c3C7D69e4256d3C').then(()=>{this.textContent='✅ Copied!';setTimeout(()=>{this.textContent='0x22b6…6d3C'},1500)})"
+        title="0x22b60210722FDd302E7784d26c3C7D69e4256d3C">0x22b6…6d3C</div>
     </div>
   </div>
+  <div class="footer-note">Built on <span style="color:var(--accent)">Arc Testnet</span> · Real RPC data · USDC · EURC · USYC</div>
 </footer>
 
 <script>
-  // ── Helpers ──────────────────────────────────────────────────────────────
+'use strict';
 
-  function shortAddr(addr) {
-    return addr.slice(0,6) + '...' + addr.slice(-4);
-  }
+// ─── Config ───────────────────────────────────────────────────────────────────
+const RPCS = [
+  'https://rpc.testnet.arc.network',
+  'https://rpc.blockdaemon.testnet.arc.network',
+  'https://rpc.quicknode.testnet.arc.network',
+  'https://rpc.drpc.testnet.arc.network',
+];
+const EXPLORER = 'https://testnet.arcscan.app';
 
-  function randomInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  }
+// Official Arc Testnet token contracts
+const TOKENS = [
+  { sym:'USDC', name:'USD Coin',  addr:'0x3600000000000000000000000000000000000000', dec:6,  icon:'$', color:'#2775ca', bg:'rgba(39,117,202,.15)', note:'Native gas token' },
+  { sym:'EURC', name:'Euro Coin', addr:'0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a', dec:6,  icon:'€', color:'#00a86b', bg:'rgba(0,168,107,.15)',  note:'Euro stablecoin' },
+  { sym:'USYC', name:'USYC',      addr:'0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C', dec:6,  icon:'⟳', color:'#7b61ff', bg:'rgba(123,97,255,.15)', note:'Yield-bearing' },
+];
 
-  function randomFloat(min, max, decimals = 4) {
-    return parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
-  }
+const CONTRACT_LABELS = {
+  '0x3600000000000000000000000000000000000000': 'USDC Contract',
+  '0x89b50855aa3be2f677cd6303cec089b5f319d72a': 'EURC Contract',
+  '0xe9185f0c5f296ed1797aae4238d26ccabeadb86c': 'USYC Contract',
+  '0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa': 'CCTP TokenMessenger',
+  '0xe737e5cebeeba77efe34d4aa090756590b1ce275': 'CCTP Transmitter',
+  '0x9fdf14c5b14173d74c08af27aebff39240dc105a': 'USYC Teller',
+};
 
-  function randomHash() {
-    return '0x' + [...Array(64)].map(() => Math.floor(Math.random()*16).toString(16)).join('');
-  }
+// ERC-20 Transfer event signature
+const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
-  function randomAddr() {
-    return '0x' + [...Array(40)].map(() => Math.floor(Math.random()*16).toString(16)).join('');
-  }
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function cLabel(addr) {
+  return addr ? (CONTRACT_LABELS[(addr||'').toLowerCase()] || null) : null;
+}
 
-  function timeAgo(minutesAgo) {
-    if (minutesAgo < 60) return minutesAgo + 'm ago';
-    if (minutesAgo < 1440) return Math.floor(minutesAgo/60) + 'h ago';
-    return Math.floor(minutesAgo/1440) + 'd ago';
-  }
+function hex2dec(h) { return h ? parseInt(h, 16) : 0; }
 
-  // ── Generate mock data ───────────────────────────────────────────────────
+function fromWei(hexVal, dec) {
+  try {
+    const raw = BigInt(hexVal || '0x0');
+    const d   = BigInt(10 ** dec);
+    const whole = raw / d;
+    const frac  = raw % d;
+    const fs = frac.toString().padStart(dec,'0').slice(0,6).replace(/0+$/,'');
+    return fs ? `${whole}.${fs}` : `${whole}`;
+  } catch { return '0'; }
+}
 
-  function generateMockData(address) {
-    const types = ['send','receive','contract','swap'];
-    const typeWeights = [0.3, 0.35, 0.2, 0.15];
+function fmtTime(u) {
+  if (!u) return '—';
+  return new Date(u*1000).toLocaleString('en-GB',{
+    day:'2-digit',month:'short',year:'numeric',
+    hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,
+  });
+}
 
-    const pickType = () => {
-      const r = Math.random();
-      let cum = 0;
-      for (let i = 0; i < types.length; i++) {
-        cum += typeWeights[i];
-        if (r < cum) return types[i];
-      }
-      return 'send';
-    };
+function ago(u) {
+  const s = Math.floor(Date.now()/1000) - u;
+  if (s < 60)    return s+'s ago';
+  if (s < 3600)  return Math.floor(s/60)+'m ago';
+  if (s < 86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
 
-    const txCount = randomInt(28, 120);
-    const transactions = [];
+function short(a) {
+  if (!a || a.length < 12) return a || '—';
+  return a.slice(0,6)+'…'+a.slice(-4);
+}
 
-    for (let i = 0; i < Math.min(txCount, 20); i++) {
-      const type = pickType();
-      transactions.push({
-        hash: randomHash(),
-        type,
-        from: type === 'receive' ? randomAddr() : address,
-        to:   type === 'send'    ? randomAddr() : (type === 'receive' ? address : randomAddr()),
-        value: randomFloat(0.01, 50, 4),
-        gas: randomInt(21000, 150000),
-        age: randomInt(1, 2880),
-      });
-    }
+function setMsg(m) { document.getElementById('loadingText').textContent = m; }
 
-    // 30-day volume
-    const volumeLabels = [];
-    const volumeData   = [];
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      volumeLabels.push(d.toLocaleDateString('en',{month:'short',day:'numeric'}));
-      volumeData.push(randomInt(0, 8));
-    }
-
-    // Type breakdown
-    const typeCounts = { send: 0, receive: 0, contract: 0, swap: 0 };
-    transactions.forEach(t => typeCounts[t.type]++);
-    const remaining = txCount - transactions.length;
-    typeCounts.send    += Math.floor(remaining * 0.3);
-    typeCounts.receive += Math.floor(remaining * 0.35);
-    typeCounts.contract+= Math.floor(remaining * 0.2);
-    typeCounts.swap    += Math.floor(remaining * 0.15);
-
-    // Tokens
-    const tokens = [
-      { sym:'ARC',  name:'Arc Token',    icon:'⬡', color:'#00e5ff', bg:'rgba(0,229,255,0.15)',  amount: randomFloat(10, 500, 2) },
-      { sym:'USDC', name:'USD Coin',     icon:'$', color:'#00ff9d', bg:'rgba(0,255,157,0.15)',  amount: randomFloat(50, 2000, 2) },
-      { sym:'WBTC', name:'Wrapped BTC',  icon:'₿', color:'#ff6b35', bg:'rgba(255,107,53,0.15)', amount: randomFloat(0.001, 0.1, 6) },
-      { sym:'ARX',  name:'Arc Exchange', icon:'⟳', color:'#7b61ff', bg:'rgba(123,97,255,0.15)', amount: randomFloat(100, 5000, 0) },
-    ];
-
-    // Heatmap (7 days × 24 hours = 168 cells)
-    const heatmap = Array.from({length: 168}, () => {
-      const r = Math.random();
-      if (r < 0.5) return 0;
-      if (r < 0.7) return 1;
-      if (r < 0.85) return 2;
-      if (r < 0.95) return 3;
-      return 4;
-    });
-
-    const totalSent = transactions
-      .filter(t => t.type === 'send' || t.type === 'swap')
-      .reduce((s, t) => s + t.value, 0)
-      .toFixed(2);
-
-    const contractsTouched = randomInt(3, 18);
-    const balance = randomFloat(5, 200, 4);
-    const lastActive = randomInt(5, 120);
-
-    return {
-      address, txCount, transactions, volumeLabels, volumeData,
-      typeCounts, tokens, heatmap, totalSent, contractsTouched, balance, lastActive,
-    };
-  }
-
-  // ── Charts ───────────────────────────────────────────────────────────────
-
-  let txChartInst   = null;
-  let typeChartInst = null;
-
-  function buildCharts(data) {
-    if (txChartInst)   txChartInst.destroy();
-    if (typeChartInst) typeChartInst.destroy();
-
-    const mono = "'Space Mono', monospace";
-
-    // Line chart — tx volume
-    txChartInst = new Chart(document.getElementById('txChart'), {
-      type: 'line',
-      data: {
-        labels: data.volumeLabels,
-        datasets: [{
-          data: data.volumeData,
-          borderColor: '#00e5ff',
-          backgroundColor: 'rgba(0,229,255,0.08)',
-          borderWidth: 1.5,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          tension: 0.4,
-          fill: true,
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: {
-          backgroundColor: '#0c1520',
-          borderColor: '#1a3045',
-          borderWidth: 1,
-          titleColor: '#4a7a99',
-          bodyColor: '#00e5ff',
-          titleFont: { family: mono, size: 9 },
-          bodyFont: { family: mono, size: 11 },
-          callbacks: { title: i => i[0].label, label: i => i.raw + ' txns' }
-        }},
-        scales: {
-          x: {
-            ticks: { color: '#4a7a99', font: { family: mono, size: 8 }, maxTicksLimit: 6 },
-            grid: { color: 'rgba(26,48,69,0.5)', drawBorder: false },
-          },
-          y: {
-            ticks: { color: '#4a7a99', font: { family: mono, size: 9 } },
-            grid: { color: 'rgba(26,48,69,0.5)', drawBorder: false },
-            beginAtZero: true,
-          }
-        }
-      }
-    });
-
-    // Doughnut — type breakdown
-    const tc = data.typeCounts;
-    typeChartInst = new Chart(document.getElementById('typeChart'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Send','Receive','Contract','Swap'],
-        datasets: [{
-          data: [tc.send, tc.receive, tc.contract, tc.swap],
-          backgroundColor: ['rgba(255,107,53,0.8)','rgba(0,255,157,0.8)','rgba(123,97,255,0.8)','rgba(0,229,255,0.8)'],
-          borderColor: '#050a0f',
-          borderWidth: 2,
-          hoverOffset: 6,
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        cutout: '70%',
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { color: '#4a7a99', font: { family: mono, size: 9 }, padding: 12, boxWidth: 10 }
-          },
-          tooltip: {
-            backgroundColor: '#0c1520',
-            borderColor: '#1a3045',
-            borderWidth: 1,
-            titleColor: '#4a7a99',
-            bodyColor: '#e0f0ff',
-            titleFont: { family: mono, size: 9 },
-            bodyFont: { family: mono, size: 11 },
-          }
-        }
-      }
-    });
-  }
-
-  // ── Render ───────────────────────────────────────────────────────────────
-
-  function renderDashboard(data) {
-    // Wallet strip
-    document.getElementById('displayAddr').textContent = data.address;
-    document.getElementById('displayMeta').textContent =
-      `Arc Testnet · Last active: ${timeAgo(data.lastActive)}`;
-
-    // Stats
-    document.getElementById('stat-txCount').textContent = data.txCount;
-    document.getElementById('stat-txSub').textContent   = 'all time';
-    document.getElementById('stat-balance').textContent = data.balance + ' ARC';
-    document.getElementById('stat-sent').textContent    = data.totalSent + ' ARC';
-    document.getElementById('stat-sentSub').textContent = 'across sends & swaps';
-    document.getElementById('stat-contracts').textContent = data.contractsTouched;
-
-    // Charts
-    buildCharts(data);
-
-    // Heatmap
-    const hm = document.getElementById('heatmap');
-    hm.innerHTML = '';
-    data.heatmap.forEach(v => {
-      const cell = document.createElement('div');
-      cell.className = `heat-cell heat-${v}`;
-      hm.appendChild(cell);
-    });
-
-    // Tokens
-    const tl = document.getElementById('tokenList');
-    tl.innerHTML = data.tokens.map(t => `
-      <div class="token-item">
-        <div class="token-left">
-          <div class="token-icon" style="background:${t.bg};color:${t.color}">${t.icon}</div>
-          <div>
-            <div class="token-name">${t.name}</div>
-            <div class="token-sym">${t.sym}</div>
-          </div>
-        </div>
-        <div>
-          <div class="token-amount" style="color:${t.color}">${t.amount} ${t.sym}</div>
-          <div class="token-val">Testnet</div>
-        </div>
-      </div>
-    `).join('');
-
-    // Transactions
-    document.getElementById('txCountLabel').textContent = data.txCount + ' total';
-    const typeClass = { send:'type-send', receive:'type-receive', contract:'type-contract', swap:'type-swap' };
-    const tb = document.getElementById('txBody');
-    tb.innerHTML = data.transactions.map(tx => `
-      <tr>
-        <td><span class="tx-hash" title="${tx.hash}">${tx.hash.slice(0,10)}…${tx.hash.slice(-6)}</span></td>
-        <td><span class="tx-type ${typeClass[tx.type]}">${tx.type}</span></td>
-        <td style="font-size:0.68rem;color:var(--muted)">${shortAddr(tx.from)} → ${shortAddr(tx.to)}</td>
-        <td style="color:var(--text)">${tx.value} ARC</td>
-        <td style="color:var(--muted)">${tx.gas.toLocaleString()}</td>
-        <td style="color:var(--muted)">${timeAgo(tx.age)}</td>
-        <td><span class="tx-status-ok"></span></td>
-      </tr>
-    `).join('');
-  }
-
-  // ── Load wallet ──────────────────────────────────────────────────────────
-
-  function loadWallet() {
-    const raw = document.getElementById('walletInput').value.trim();
-    const addr = raw || randomAddr();
-    if (!raw) document.getElementById('walletInput').value = addr;
-
-    document.getElementById('loading').style.display = 'block';
-    document.getElementById('dashboard').style.display = 'none';
-
-    setTimeout(() => {
-      const data = generateMockData(addr);
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('dashboard').style.display = 'block';
-      renderDashboard(data);
-      document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
-    }, 1400);
-  }
-
-  function loadDemo() {
-    const demo = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
-    document.getElementById('walletInput').value = demo;
-    loadWallet();
-  }
-
-  // ── GM Logic ─────────────────────────────────────────────────────────────
-
-  const GM_KEY = 'arc_gm_data_v2';
-  let gmData   = { count: 0, streak: 0, bestStreak: 0, lastDate: null, sentDates: [], history: [] };
-  let currentWallet = null;
-
-  function loadGMData() {
+// ─── RPC ──────────────────────────────────────────────────────────────────────
+let _rid = 1;
+async function rpc(method, params) {
+  const body = JSON.stringify({jsonrpc:'2.0',id:_rid++,method,params});
+  for (const url of RPCS) {
     try {
-      const raw = localStorage.getItem(GM_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        gmData = Object.assign({ count:0, streak:0, bestStreak:0, lastDate:null, sentDates:[], history:[] }, parsed);
-      }
-    } catch(e) {}
-    // Check if streak is broken (missed yesterday)
-    checkStreakIntegrity();
-    updateGMUI();
+      const r = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body});
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (j.error) throw new Error(j.error.message);
+      return j.result;
+    } catch(e) { console.warn(url, e.message); }
+  }
+  throw new Error('All RPCs failed');
+}
+
+// ─── Token balance (ERC-20 balanceOf) ─────────────────────────────────────────
+async function tokBal(tokenAddr, wallet, dec) {
+  try {
+    const data = '0x70a08231' + wallet.slice(2).toLowerCase().padStart(64,'0');
+    const res  = await rpc('eth_call', [{to:tokenAddr, data},'latest']);
+    const raw  = BigInt(res||'0x0');
+    const d    = BigInt(10**dec);
+    const w    = raw/d;
+    const f    = (raw%d).toString().padStart(dec,'0').slice(0,4).replace(/0+$/,'');
+    return f ? `${w}.${f}` : `${w}`;
+  } catch { return '0'; }
+}
+
+// ─── Fetch logs with auto-split on range error ─────────────────────────────────
+async function getLogs(fromB, toB, topics) {
+  const params = [{fromBlock:'0x'+fromB.toString(16), toBlock:'0x'+toB.toString(16), topics}];
+  try {
+    const r = await rpc('eth_getLogs', params);
+    return Array.isArray(r) ? r : [];
+  } catch(e) {
+    // Range rejected — split in half recursively
+    if (toB - fromB < 10) return []; // base case: can't split further
+    const mid = Math.floor((fromB + toB) / 2);
+    const [a, b] = await Promise.all([
+      getLogs(fromB, mid, topics),
+      getLogs(mid+1, toB, topics),
+    ]);
+    return [...a, ...b];
+  }
+}
+
+// ─── Main fetch function ───────────────────────────────────────────────────────
+async function fetchWallet(address) {
+  const addrLow = address.toLowerCase();
+
+  // Topic-padded address for eth_getLogs (32 bytes = 24 zeros + 40 hex)
+  const topicAddr = '0x' + '0'.repeat(24) + addrLow.slice(2);
+
+  // ── 1. Basic info ────────────────────────────────────────────────────────
+  setMsg('Connecting to Arc Testnet RPC...');
+  const [balHex, nonceHex, blockHex] = await Promise.all([
+    rpc('eth_getBalance',          [address, 'latest']),
+    rpc('eth_getTransactionCount', [address, 'latest']),
+    rpc('eth_blockNumber',         []),
+  ]);
+  const nativeBal  = fromWei(balHex, 18); // Arc native USDC = 18 decimals
+  const nonce      = hex2dec(nonceHex);
+  const latestBlock = hex2dec(blockHex);
+
+  // ── 2. Token balances ────────────────────────────────────────────────────
+  setMsg('Reading token balances (USDC · EURC · USYC)...');
+  const tokBals = await Promise.all(
+    TOKENS.map(async t => ({...t, balance: await tokBal(t.addr, address, t.dec)}))
+  );
+
+  // ── 3. Fetch ALL Transfer logs in chunks ─────────────────────────────────
+  // Process each 10k-block chunk sequentially to avoid race conditions.
+  // For each chunk, fetch SENT and RECEIVED logs in parallel.
+  const CHUNK = 10000;
+  const allLogs = [];
+
+  for (let from = 0; from <= latestBlock; from += CHUNK) {
+    const to = Math.min(from + CHUNK - 1, latestBlock);
+    setMsg(`Scanning blocks ${from.toLocaleString()} – ${to.toLocaleString()} / ${latestBlock.toLocaleString()}\n${allLogs.length} events found so far…`);
+
+    const [sent, recv] = await Promise.all([
+      getLogs(from, to, [TRANSFER_TOPIC, topicAddr, null]),
+      getLogs(from, to, [TRANSFER_TOPIC, null, topicAddr]),
+    ]);
+    allLogs.push(...sent, ...recv);
   }
 
-  function saveGMData() {
-    try { localStorage.setItem(GM_KEY, JSON.stringify(gmData)); } catch(e) {}
+  // ── 4. Deduplicate logs ──────────────────────────────────────────────────
+  // Key = txHash + logIndex (handles same tx appearing in both sent & recv)
+  const logMap = new Map();
+  for (const log of allLogs) {
+    const idx = typeof log.logIndex === 'string' ? parseInt(log.logIndex, 16) : (log.logIndex || 0);
+    const key = log.transactionHash + ':' + idx;
+    if (!logMap.has(key)) logMap.set(key, log);
+  }
+  const uniqueLogs = [...logMap.values()];
+  setMsg(`Found ${uniqueLogs.length} transfer events.\nFetching block timestamps…`);
+
+  // ── 5. Batch-fetch block timestamps ──────────────────────────────────────
+  const blockNums = [...new Set(uniqueLogs.map(l => hex2dec(l.blockNumber)))];
+  const tsMap = {};
+
+  for (let i = 0; i < blockNums.length; i += 20) {
+    const batch = blockNums.slice(i, i+20);
+    setMsg(`Loading timestamps: ${i+1} – ${Math.min(i+20, blockNums.length)} of ${blockNums.length} blocks…`);
+    const results = await Promise.all(
+      batch.map(n => rpc('eth_getBlockByNumber', ['0x'+n.toString(16), false]).catch(()=>null))
+    );
+    results.forEach(b => {
+      if (b?.number) tsMap[hex2dec(b.number)] = hex2dec(b.timestamp);
+    });
   }
 
-  function todayStr() {
-    return new Date().toISOString().slice(0, 10);
+  // ── 6. Build transaction list ─────────────────────────────────────────────
+  setMsg('Building transaction list…');
+  const txMap = new Map();
+
+  for (const log of uniqueLogs) {
+    const idx      = typeof log.logIndex === 'string' ? parseInt(log.logIndex,16) : (log.logIndex||0);
+    const key      = log.transactionHash + ':' + idx;
+    const blockNum = hex2dec(log.blockNumber);
+    const ts       = tsMap[blockNum] || 0;
+
+    // Decode: topics[1]=from(padded 32B), topics[2]=to(padded 32B), data=value
+    const fromAddr = '0x' + (log.topics[1]||'').slice(-40);
+    const toAddr   = '0x' + (log.topics[2]||'').slice(-40);
+
+    let rawVal = BigInt(0);
+    try { rawVal = BigInt(log.data||'0x0'); } catch{}
+
+    const token   = TOKENS.find(t => t.addr.toLowerCase() === (log.address||'').toLowerCase());
+    const dec     = token?.dec ?? 6;
+    const sym     = token?.sym ?? 'USDC';
+    const color   = token?.color ?? '#2775ca';
+    const value   = Number(rawVal) / (10**dec);
+    const valStr  = value.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:6});
+    const isSend  = fromAddr.toLowerCase() === addrLow;
+
+    txMap.set(key, {
+      hash: log.transactionHash,
+      type: isSend ? 'send' : 'receive',
+      from: fromAddr, to: toAddr,
+      value, valStr, sym, color,
+      blockNum, ts,
+      timeStr: fmtTime(ts),
+      source: 'log',
+    });
   }
 
-  function dateStr(daysAgo) {
-    const d = new Date();
-    d.setDate(d.getDate() - daysAgo);
-    return d.toISOString().slice(0, 10);
-  }
+  // Sort newest first
+  const txList = [...txMap.values()].sort((a,b) => (b.ts||0)-(a.ts||0));
 
-  function gmSentToday() {
-    return gmData.lastDate === todayStr();
-  }
-
-  function checkStreakIntegrity() {
-    if (!gmData.lastDate) return;
-    const yesterday = dateStr(1);
-    const today     = todayStr();
-    // If last gm wasn't today or yesterday, streak is broken
-    if (gmData.lastDate !== today && gmData.lastDate !== yesterday) {
-      gmData.streak = 0;
-      saveGMData();
-    }
-  }
-
-  function updateGMUI() {
-    const countEl  = document.getElementById('gmCount');
-    const btn      = document.getElementById('gmBtn');
-    const cooldown = document.getElementById('gmCooldown');
-    const streakEl = document.getElementById('gmStreak');
-    const bestEl   = document.getElementById('gmBest');
-    if (!countEl) return;
-
-    countEl.textContent  = gmData.count;
-    streakEl.textContent = `🔥 ${gmData.streak} day streak`;
-    if (bestEl) bestEl.textContent = gmData.bestStreak || gmData.streak;
-
-    // Sync stat card
-    const statStreak = document.getElementById('stat-gmstreak');
-    const statSub    = document.getElementById('stat-gmstreaksub');
-    if (statStreak) statStreak.textContent = gmData.streak;
-    if (statSub)    statSub.textContent    = gmData.streak === 1 ? 'day in a row' : 'days in a row';
-
-    // Streak calendar — last 7 days
-    const cal = document.getElementById('streakCalendar');
-    if (cal) {
-      cal.innerHTML = '';
-      for (let i = 6; i >= 0; i--) {
-        const ds   = dateStr(i);
-        const sent = gmData.sentDates.includes(ds);
-        const isToday = ds === todayStr();
-        const day  = document.createElement('div');
-        const label = new Date(ds + 'T12:00:00').toLocaleDateString('en',{weekday:'short'}).slice(0,1);
-        day.style.cssText = `
-          display:flex;flex-direction:column;align-items:center;gap:3px;
-        `;
-        day.innerHTML = `
-          <div style="
-            width:28px;height:28px;border-radius:6px;
-            background:${sent ? '#ffd200' : 'var(--border)'};
-            border:${isToday && !sent ? '1px dashed rgba(255,210,0,0.5)' : '1px solid transparent'};
-            display:flex;align-items:center;justify-content:center;
-            font-size:0.75rem;
-            box-shadow:${sent ? '0 0 8px rgba(255,210,0,0.4)' : 'none'};
-            transition:all 0.3s;
-          ">${sent ? '☀️' : ''}</div>
-          <div style="font-size:0.55rem;color:var(--muted)">${label}</div>
-        `;
-        cal.appendChild(day);
-      }
-    }
-
-    if (!currentWallet) {
-      btn.disabled = true;
-      btn.textContent = '☀️ GM';
-      btn.classList.add('gm-btn-shimmer');
-      cooldown.textContent = 'Load a wallet to send GM';
-      return;
-    }
-
-    if (gmSentToday()) {
-      btn.disabled = true;
-      btn.textContent = '✅ GM Sent';
-      btn.classList.remove('gm-btn-shimmer');
-      // live countdown
-      const now      = new Date();
-      const midnight = new Date(); midnight.setHours(24,0,0,0);
-      const diff = midnight - now;
-      const hh = String(Math.floor(diff/3600000)).padStart(2,'0');
-      const mm = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
-      const ss = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
-      cooldown.textContent = `Next GM in ${hh}:${mm}:${ss}`;
-    } else {
-      btn.disabled = false;
-      btn.textContent = '☀️ GM';
-      btn.classList.add('gm-btn-shimmer');
-      cooldown.textContent = 'Ready! Send your daily GM ↑';
-    }
-  }
-
-  // Live countdown ticker
-  setInterval(() => { if (currentWallet) updateGMUI(); }, 1000);
-
-  function sendGM() {
-    if (gmSentToday() || !currentWallet) return;
-
-    const btn = document.getElementById('gmBtn');
-    btn.textContent = '⏳ Sending...';
-    btn.disabled = true;
-    btn.classList.remove('gm-btn-shimmer');
-    document.getElementById('gmCooldown').textContent = 'Broadcasting to Arc Testnet...';
-
-    setTimeout(() => {
-      const today     = todayStr();
-      const yesterday = dateStr(1);
-
-      // Streak calc
-      if (gmData.lastDate === yesterday) {
-        gmData.streak += 1;
-      } else if (gmData.lastDate !== today) {
-        gmData.streak = 1;
-      }
-      if (gmData.streak > (gmData.bestStreak || 0)) gmData.bestStreak = gmData.streak;
-
-      gmData.count   += 1;
-      gmData.lastDate = today;
-      if (!gmData.sentDates.includes(today)) gmData.sentDates.push(today);
-      // Keep only last 90 days
-      gmData.sentDates = gmData.sentDates.slice(-90);
-
-      const gmTx = {
-        hash:  randomHash(),
-        type:  'gm',
-        from:  currentWallet,
-        to:    '0xGM000000000000000000000000000000000000GM',
-        value: 0,
-        gas:   21000,
-        age:   0,
-      };
-      gmData.history.unshift(gmTx);
-      gmData.history = gmData.history.slice(0, 50);
-      saveGMData();
-
-      // Bump total tx stat
-      const txEl = document.getElementById('stat-txCount');
-      if (txEl) txEl.textContent = (parseInt(txEl.textContent) || 0) + 1;
-
-      // Bump tx label
-      const lbl = document.getElementById('txCountLabel');
-      if (lbl) {
-        const cur = parseInt(lbl.textContent) || 0;
-        lbl.textContent = (cur + 1) + ' total';
-      }
-
-      // Pop animation
-      const countEl = document.getElementById('gmCount');
-      countEl.classList.remove('pop');
-      void countEl.offsetWidth;
-      countEl.classList.add('pop');
-
-      prependGMRow(gmTx);
-      updateGMUI();
-      showGMToast();
-
-    }, 1200);
-  }
-
-  function prependGMRow(tx) {
-    const tb = document.getElementById('txBody');
-    if (!tb) return;
-    const row = document.createElement('tr');
-    row.className = 'gm-tx-row';
-    row.innerHTML = `
-      <td><span class="tx-hash" title="${tx.hash}">${tx.hash.slice(0,10)}…${tx.hash.slice(-6)}</span></td>
-      <td><span class="type-gm">GM</span></td>
-      <td style="font-size:0.68rem;color:var(--muted)">${shortAddr(tx.from)} → <span style="color:#ffd200">GM Contract</span></td>
-      <td style="color:#ffd200">0 ARC</td>
-      <td style="color:var(--muted)">21,000</td>
-      <td style="color:var(--muted)">just now</td>
-      <td><span class="tx-status-ok"></span></td>
-    `;
-    tb.insertBefore(row, tb.firstChild);
-  }
-
-  function showGMToast() {
-    let toast = document.getElementById('gmToast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.id = 'gmToast';
-      toast.className = 'gm-toast';
-      document.body.appendChild(toast);
-    }
-    const msgs = [
-      `☀️ GM sent! Transaction confirmed on Arc Testnet.`,
-      `🌅 Good morning! GM #${gmData.count} is on-chain.`,
-      `✅ GM recorded. ${gmData.streak} day streak — keep it up!`,
-      `🔥 ${gmData.streak} day streak! Arc knows you mean it.`,
-    ];
-    toast.textContent = msgs[Math.floor(Math.random() * msgs.length)];
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 3500);
-  }
-
-  // ── Override renderDashboard to wire up GM ────────────────────────────────
-
-  const _origRenderDashboard = renderDashboard;
-  renderDashboard = function(data) {
-    currentWallet = data.address;
-    _origRenderDashboard(data);
-    loadGMData();
-    // Inject up to 3 saved GM txns at top of table
-    gmData.history.slice(0, 3).forEach(prependGMRow);
-    // Correct the tx total label to include GMs
-    const lbl = document.getElementById('txCountLabel');
-    if (lbl) lbl.textContent = (data.txCount + gmData.count) + ' total';
-  };
-
-  // Load GM state immediately so panel shows saved data on page load
-  loadGMData();
-
-  // Enter key
-  document.getElementById('walletInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') loadWallet();
+  // ── 7. Analytics ─────────────────────────────────────────────────────────
+  const typeCounts = {send:0,receive:0,contract:0,approve:0,gm:0};
+  let totalSent=0, totalRecv=0;
+  txList.forEach(tx => {
+    typeCounts[tx.type] = (typeCounts[tx.type]||0) + 1;
+    if (tx.type==='send')    totalSent += tx.value;
+    if (tx.type==='receive') totalRecv += tx.value;
   });
 
+  // 30-day volume
+  const volMap={}, volLabels=[], volData=[];
+  for (let i=29;i>=0;i--) {
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const k=d.toISOString().slice(0,10);
+    volMap[k]=0;
+    volLabels.push(d.toLocaleDateString('en',{month:'short',day:'numeric'}));
+  }
+  txList.forEach(tx=>{
+    if(!tx.ts) return;
+    const k=new Date(tx.ts*1000).toISOString().slice(0,10);
+    if(k in volMap) volMap[k]++;
+  });
+  Object.values(volMap).forEach(v=>volData.push(v));
+
+  // Heatmap
+  const heatmap=Array(168).fill(0);
+  const nowSec=Math.floor(Date.now()/1000);
+  txList.forEach(tx=>{
+    if(!tx.ts) return;
+    const sec=nowSec-tx.ts;
+    if(sec>=0&&sec<7*86400){
+      const day=Math.min(6,Math.floor(sec/86400));
+      const hr=new Date(tx.ts*1000).getHours();
+      const idx=(6-day)*24+hr;
+      if(idx>=0&&idx<168) heatmap[idx]=Math.min(4,heatmap[idx]+1);
+    }
+  });
+
+  const lastActive = txList.length>0 ? ago(txList[0].ts) : null;
+  setMsg(`Done! ${txList.length} transactions loaded.`);
+
+  return {
+    address, nativeBal, nonce, tokBals, txList,
+    typeCounts, totalSent, totalRecv,
+    volLabels, volData, heatmap, lastActive, latestBlock, live:true,
+  };
+}
+
+// ─── Mock fallback ────────────────────────────────────────────────────────────
+function rndHex(n){return [...Array(n)].map(()=>Math.floor(Math.random()*16).toString(16)).join('')}
+function rndAddr(){return '0x'+rndHex(40)}
+function rndHash(){return '0x'+rndHex(64)}
+function rndF(a,b,d=2){return parseFloat((Math.random()*(b-a)+a).toFixed(d))}
+function rndI(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+
+function mockData(address) {
+  const txList=[];
+  for(let i=0;i<40;i++){
+    const isSend=Math.random()>.5;
+    const tok=TOKENS[rndI(0,2)];
+    const val=rndF(.01,500);
+    const ts=Math.floor(Date.now()/1000)-rndI(60,2592000);
+    txList.push({
+      hash:rndHash(),type:isSend?'send':'receive',
+      from:isSend?address:rndAddr(),
+      to:isSend?rndAddr():address,
+      value:val,valStr:val.toFixed(2),
+      sym:tok.sym,color:tok.color,
+      blockNum:rndI(1000,50000),ts,
+      timeStr:fmtTime(ts),source:'mock',
+    });
+  }
+  txList.sort((a,b)=>b.ts-a.ts);
+  const volLabels=[],volData=[];
+  for(let i=29;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);volLabels.push(d.toLocaleDateString('en',{month:'short',day:'numeric'}));volData.push(rndI(0,8))}
+  const heatmap=Array(168).fill(0).map(()=>rndI(0,3));
+  return{
+    address,nativeBal:rndF(1,100,4).toString(),nonce:40,
+    tokBals:TOKENS.map(t=>({...t,balance:rndF(0,300,2).toString()})),
+    txList,typeCounts:{send:20,receive:20,contract:0,approve:0,gm:0},
+    totalSent:rndF(100,1000,2),totalRecv:rndF(100,1000,2),
+    volLabels,volData,heatmap,lastActive:'2h ago',latestBlock:50000,live:false,
+  };
+}
+
+// ─── Charts ───────────────────────────────────────────────────────────────────
+let _volChart=null, _typeChart=null;
+
+function buildCharts(d) {
+  if(_volChart) _volChart.destroy();
+  if(_typeChart) _typeChart.destroy();
+
+  _volChart=new Chart(document.getElementById('volChart'),{
+    type:'line',
+    data:{labels:d.volLabels,datasets:[{data:d.volData,borderColor:'#00e5ff',backgroundColor:'rgba(0,229,255,.07)',borderWidth:1.5,pointRadius:0,tension:.4,fill:true}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#0c1520',borderColor:'#1a3045',borderWidth:1,titleColor:'#4a7a99',bodyColor:'#00e5ff',callbacks:{title:i=>i[0].label,label:i=>i.raw+' txs'}}},
+      scales:{x:{ticks:{color:'#4a7a99',font:{size:8},maxTicksLimit:6},grid:{color:'rgba(26,48,69,.5)'}},y:{ticks:{color:'#4a7a99',font:{size:9}},grid:{color:'rgba(26,48,69,.5)'},beginAtZero:true}}}
+  });
+
+  const tc=d.typeCounts;
+  _typeChart=new Chart(document.getElementById('typeChart'),{
+    type:'doughnut',
+    data:{
+      labels:['Send','Receive','Contract','Approve','GM'],
+      datasets:[{data:[tc.send||0,tc.receive||0,tc.contract||0,tc.approve||0,tc.gm||0],
+        backgroundColor:['rgba(255,107,53,.85)','rgba(0,255,157,.85)','rgba(123,97,255,.85)','rgba(255,210,0,.85)','rgba(0,229,255,.85)'],
+        borderColor:'#050a0f',borderWidth:2,hoverOffset:6}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,cutout:'68%',
+      plugins:{legend:{position:'bottom',labels:{color:'#4a7a99',font:{size:9},padding:10,boxWidth:10}},
+        tooltip:{backgroundColor:'#0c1520',borderColor:'#1a3045',borderWidth:1,titleColor:'#4a7a99',bodyColor:'#e0f0ff'}}}
+  });
+}
+
+// ─── Render dashboard ─────────────────────────────────────────────────────────
+function renderDashboard(data) {
+  // Strip
+  document.getElementById('dispAddr').textContent = data.address;
+  document.getElementById('dispMeta').textContent =
+    `Arc Testnet · Block #${data.latestBlock.toLocaleString()}` +
+    (data.lastActive ? ` · Last active: ${data.lastActive}` : '');
+  if (!data.live) {
+    const nb = document.getElementById('netBadge');
+    nb.className = 'net-badge net-demo';
+    document.getElementById('netLabel').textContent = 'Demo Mode';
+  }
+
+  // Stats
+  document.getElementById('sTxFound').textContent  = data.txList.length;
+  document.getElementById('sTxSub').textContent    = `nonce: ${data.nonce}`;
+  document.getElementById('sBalance').textContent  = parseFloat(data.nativeBal).toFixed(4)+' USDC';
+  document.getElementById('sSent').textContent     = data.totalSent.toFixed(2);
+  document.getElementById('sReceived').textContent = data.totalRecv.toFixed(2);
+  document.getElementById('sGmStreak').textContent = gmData.streak;
+
+  // Charts
+  buildCharts(data);
+
+  // Heatmap
+  const hm = document.getElementById('heatmap');
+  hm.innerHTML = '';
+  data.heatmap.forEach(v => {
+    const c = document.createElement('div');
+    c.className = `heat-cell h${v}`;
+    hm.appendChild(c);
+  });
+
+  // Tokens
+  const tl = document.getElementById('tokenList');
+  tl.innerHTML = data.tokBals.map(t => `
+    <div class="token-row">
+      <div class="tok-left">
+        <div class="tok-icon" style="background:${t.bg};color:${t.color}">${t.icon}</div>
+        <div>
+          <div class="tok-name">${t.name}</div>
+          <div class="tok-sym">${t.sym} &middot; <span style="font-size:.58rem;color:var(--muted)">${t.note}</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="tok-amt" style="color:${t.color}">${parseFloat(t.balance||0).toLocaleString(undefined,{maximumFractionDigits:4})} ${t.sym}</div>
+        <div class="tok-note">
+          <a href="${EXPLORER}/address/${t.addr}" target="_blank" rel="noopener"
+             style="color:var(--muted);text-decoration:none;border-bottom:1px dashed var(--border)">
+            ${t.addr.slice(0,10)}…
+          </a>
+        </div>
+      </div>
+    </div>`).join('');
+
+  // Transactions
+  const typeClass = {send:'t-send',receive:'t-receive',contract:'t-contract',approve:'t-approve',gm:'t-gm'};
+
+  const rows = data.txList.map(tx => {
+    const toL   = cLabel(tx.to);
+    const fromL = cLabel(tx.from);
+    const toD   = toL   ? `<span style="color:var(--accent2);font-size:.63rem">${toL}</span>`   : short(tx.to);
+    const fromD = fromL ? `<span style="color:var(--accent2);font-size:.63rem">${fromL}</span>` : short(tx.from);
+    const cls   = typeClass[tx.type] || 't-contract';
+    return `<tr>
+      <td><a class="tx-hash" href="${EXPLORER}/tx/${tx.hash}" target="_blank" rel="noopener">${tx.hash.slice(0,8)}…${tx.hash.slice(-6)}</a></td>
+      <td><span class="badge-type ${cls}">${tx.type}</span></td>
+      <td><span style="color:${tx.color};font-size:.7rem;font-weight:700">${tx.sym}</span></td>
+      <td style="color:var(--muted);font-size:.68rem">${fromD}</td>
+      <td style="color:var(--muted);font-size:.68rem">${toD}</td>
+      <td style="color:var(--text);white-space:nowrap">${tx.valStr} <span style="color:var(--muted);font-size:.62rem">${tx.sym}</span></td>
+      <td class="tx-time">${tx.timeStr}</td>
+      <td><span class="tx-ok"></span></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('txBody').innerHTML = rows ||
+    `<tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--muted);font-size:.75rem">
+      No ERC-20 transfer events found for this wallet.<br>
+      <small>Only USDC, EURC and USYC Transfer events are tracked.</small>
+    </td></tr>`;
+
+  document.getElementById('txCountTag').textContent = `${data.txList.length} transactions`;
+}
+
+// ─── Load wallet ──────────────────────────────────────────────────────────────
+let currentWallet = null;
+
+async function analyzeWallet() {
+  const raw = document.getElementById('addrInput').value.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(raw)) {
+    alert('Invalid address.\nMust start with 0x followed by 40 hex characters.');
+    return;
+  }
+  document.getElementById('loading').style.display   = 'block';
+  document.getElementById('dashboard').style.display = 'none';
+
+  try {
+    const data = await fetchWallet(raw);
+    currentWallet = raw;
+    document.getElementById('loading').style.display   = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    renderDashboard(data);
+    // Inject saved GM rows
+    gmData.history.slice(0,5).forEach(tx => prependGMRow(tx));
+    document.getElementById('txCountTag').textContent =
+      `${data.txList.length + gmData.history.length} transactions`;
+    document.getElementById('dashboard').scrollIntoView({behavior:'smooth'});
+  } catch(err) {
+    console.error(err);
+    setMsg('RPC unavailable — loading demo data…');
+    setTimeout(() => {
+      const data = mockData(raw);
+      currentWallet = raw;
+      document.getElementById('loading').style.display   = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      renderDashboard(data);
+      document.getElementById('dashboard').scrollIntoView({behavior:'smooth'});
+    }, 900);
+  }
+}
+
+function loadDemo() {
+  document.getElementById('addrInput').value = '0x22b60210722FDd302E7784d26c3C7D69e4256d3C';
+  analyzeWallet();
+}
+
+document.getElementById('addrInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') analyzeWallet();
+});
+
+// ─── GM Logic ─────────────────────────────────────────────────────────────────
+const GM_KEY = 'arc_gm_v3';
+let gmData = {count:0,streak:0,best:0,lastDate:null,sentDates:[],history:[]};
+
+function loadGM() {
+  try {
+    const r = localStorage.getItem(GM_KEY);
+    if (r) gmData = Object.assign({count:0,streak:0,best:0,lastDate:null,sentDates:[],history:[]}, JSON.parse(r));
+  } catch {}
+  // Reset streak if missed yesterday
+  if (gmData.lastDate) {
+    const td = dStr(0), yd = dStr(1);
+    if (gmData.lastDate !== td && gmData.lastDate !== yd) gmData.streak = 0;
+  }
+  renderGM();
+}
+
+function saveGM() { try { localStorage.setItem(GM_KEY, JSON.stringify(gmData)); } catch {} }
+
+function dStr(daysAgo=0) {
+  const d = new Date(); d.setDate(d.getDate()-daysAgo);
+  return d.toISOString().slice(0,10);
+}
+
+function gmToday() { return gmData.lastDate === dStr(0); }
+
+function renderGM() {
+  document.getElementById('gmCount').textContent  = gmData.count;
+  document.getElementById('gmStreak').textContent = `🔥 ${gmData.streak} day streak`;
+  document.getElementById('gmBest').textContent   = gmData.best;
+  const el = document.getElementById('sGmStreak');
+  if (el) el.textContent = gmData.streak;
+
+  // Calendar
+  const cal = document.getElementById('streakCal');
+  cal.innerHTML = '';
+  for (let i=6; i>=0; i--) {
+    const ds      = dStr(i);
+    const sent    = gmData.sentDates.includes(ds);
+    const isToday = ds === dStr(0);
+    const letter  = new Date(ds+'T12:00:00').toLocaleDateString('en',{weekday:'short'}).slice(0,1);
+    const div = document.createElement('div');
+    div.className = 'cal-day';
+    div.innerHTML = `
+      <div class="cal-cell" style="
+        background:${sent?'var(--gold)':'var(--border)'};
+        border:${isToday&&!sent?'1px dashed rgba(255,210,0,.5)':'none'};
+        box-shadow:${sent?'0 0 8px rgba(255,210,0,.4)':'none'};
+      ">${sent?'☀️':''}</div>
+      <div class="cal-dlabel">${letter}</div>`;
+    cal.appendChild(div);
+  }
+
+  // Button state
+  const btn = document.getElementById('gmBtn');
+  const cd  = document.getElementById('gmCooldown');
+  if (gmToday()) {
+    btn.disabled = true;
+    btn.textContent = '✅ GM Sent';
+    btn.classList.remove('shimmer');
+    const now = new Date(), midnight = new Date();
+    midnight.setHours(24,0,0,0);
+    const diff = midnight - now;
+    const hh = String(Math.floor(diff/3600000)).padStart(2,'0');
+    const mm = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    const ss = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
+    cd.textContent = `Next GM in ${hh}:${mm}:${ss}`;
+  } else {
+    btn.disabled = false;
+    btn.textContent = '☀️ GM';
+    btn.classList.add('shimmer');
+    cd.textContent = 'Send your daily GM!';
+  }
+}
+
+setInterval(renderGM, 1000);
+
+function sendGM() {
+  if (gmToday()) return;
+  const btn = document.getElementById('gmBtn');
+  btn.textContent = '⏳ Sending…';
+  btn.disabled = true;
+  btn.classList.remove('shimmer');
+  document.getElementById('gmCooldown').textContent = 'Broadcasting to Arc Testnet…';
+
+  setTimeout(() => {
+    const today = dStr(0), yesterday = dStr(1);
+    gmData.streak = (gmData.lastDate === yesterday) ? gmData.streak+1 : 1;
+    if (gmData.streak > gmData.best) gmData.best = gmData.streak;
+    gmData.count++;
+    gmData.lastDate = today;
+    if (!gmData.sentDates.includes(today)) gmData.sentDates.push(today);
+    gmData.sentDates = gmData.sentDates.slice(-90);
+
+    const ts = Math.floor(Date.now()/1000);
+    const gmTx = {
+      hash: rndHash(),
+      type: 'gm',
+      from: currentWallet || rndAddr(),
+      to:   '0x6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d',
+      value:0, valStr:'0', sym:'USDC', color:'var(--gold)',
+      blockNum:0, ts, timeStr:fmtTime(ts), source:'gm',
+    };
+
+    gmData.history.unshift(gmTx);
+    gmData.history = gmData.history.slice(0,50);
+    saveGM();
+
+    // Bump stat
+    const el = document.getElementById('sTxFound');
+    if (el) el.textContent = (parseInt(el.textContent)||0)+1;
+
+    // Pop animation
+    const c = document.getElementById('gmCount');
+    c.classList.remove('pop');
+    void c.offsetWidth;
+    c.classList.add('pop');
+
+    prependGMRow(gmTx);
+    renderGM();
+    toast(`☀️ GM #${gmData.count} confirmed! ${gmData.streak}-day streak 🔥`);
+  }, 1200);
+}
+
+function prependGMRow(tx) {
+  const tb = document.getElementById('txBody');
+  if (!tb) return;
+  const row = document.createElement('tr');
+  row.className = 'gm-row';
+  row.innerHTML = `
+    <td><span class="tx-hash" style="color:var(--gold)">${tx.hash.slice(0,8)}…${tx.hash.slice(-6)}</span></td>
+    <td><span class="badge-type t-gm">GM</span></td>
+    <td><span style="color:var(--gold);font-size:.7rem;font-weight:700">USDC</span></td>
+    <td style="color:var(--muted);font-size:.68rem">${short(tx.from)}</td>
+    <td style="color:var(--gold);font-size:.63rem">GM Contract</td>
+    <td style="color:var(--gold);white-space:nowrap">0 <span style="color:var(--muted);font-size:.62rem">USDC</span></td>
+    <td class="tx-time">${tx.timeStr}</td>
+    <td><span class="tx-ok"></span></td>`;
+  tb.insertBefore(row, tb.firstChild);
+}
+
+function toast(msg) {
+  let t = document.getElementById('_toast');
+  if (!t) { t=document.createElement('div'); t.id='_toast'; t.className='gm-toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3500);
+}
+
+// Init GM
+loadGM();
 </script>
 </body>
 </html>
