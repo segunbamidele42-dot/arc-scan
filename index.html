@@ -386,116 +386,130 @@ async function tokBal(tokenAddr, wallet, dec) {
   } catch { return '0'; }
 }
 
-// ─── Fetch logs with auto-split on range error ─────────────────────────────────
+// ─── Speed config ─────────────────────────────────────────────────────────────
+// How many parallel eth_getLogs chunk requests at once
+const PARALLEL_CHUNKS = 6;
+// Block range per getLogs request (Arc testnet seems to allow large ranges)
+const CHUNK_SIZE = 50000;
+// How many block timestamp requests fire in parallel
+const TS_PARALLEL = 50;
+
+// Per-session timestamp cache so re-runs of same wallet are instant
+const _tsCache = {};
+
+// getLogs with auto-halving on range error
 async function getLogs(fromB, toB, topics) {
-  const params = [{fromBlock:'0x'+fromB.toString(16), toBlock:'0x'+toB.toString(16), topics}];
   try {
-    const r = await rpc('eth_getLogs', params);
+    const r = await rpc('eth_getLogs', [{
+      fromBlock: '0x'+fromB.toString(16),
+      toBlock:   '0x'+toB.toString(16),
+      topics,
+    }]);
     return Array.isArray(r) ? r : [];
-  } catch(e) {
-    // Range rejected — split in half recursively
-    if (toB - fromB < 10) return []; // base case: can't split further
+  } catch {
+    if (toB - fromB < 10) return [];
     const mid = Math.floor((fromB + toB) / 2);
-    const [a, b] = await Promise.all([
-      getLogs(fromB, mid, topics),
-      getLogs(mid+1, toB, topics),
-    ]);
+    const [a, b] = await Promise.all([getLogs(fromB, mid, topics), getLogs(mid+1, toB, topics)]);
     return [...a, ...b];
   }
 }
 
+// Fire N promises at a time (semaphore-style)
+async function pooled(tasks, n) {
+  const results = [];
+  for (let i = 0; i < tasks.length; i += n) {
+    const batch = await Promise.all(tasks.slice(i, i+n).map(fn => fn()));
+    results.push(...batch);
+  }
+  return results;
+}
+
 // ─── Main fetch function ───────────────────────────────────────────────────────
 async function fetchWallet(address) {
-  const addrLow = address.toLowerCase();
-
-  // Topic-padded address for eth_getLogs (32 bytes = 24 zeros + 40 hex)
+  const addrLow   = address.toLowerCase();
   const topicAddr = '0x' + '0'.repeat(24) + addrLow.slice(2);
 
-  // ── 1. Basic info ────────────────────────────────────────────────────────
-  setMsg('Connecting to Arc Testnet RPC...');
-  const [balHex, nonceHex, blockHex] = await Promise.all([
+  // ── 1. Fire balance + nonce + blockNumber ALL at once ────────────────────
+  setMsg('🔌 Connecting to Arc Testnet…');
+  const [balHex, nonceHex, blockHex, ...earlyTokBals] = await Promise.all([
     rpc('eth_getBalance',          [address, 'latest']),
     rpc('eth_getTransactionCount', [address, 'latest']),
     rpc('eth_blockNumber',         []),
+    // Fire token balances at same time — don't wait separately
+    ...TOKENS.map(t => tokBal(t.addr, address, t.dec)),
   ]);
-  const nativeBal  = fromWei(balHex, 18); // Arc native USDC = 18 decimals
-  const nonce      = hex2dec(nonceHex);
+
+  const nativeBal   = fromWei(balHex, 18);
+  const nonce       = hex2dec(nonceHex);
   const latestBlock = hex2dec(blockHex);
+  const tokBals     = TOKENS.map((t, i) => ({...t, balance: earlyTokBals[i]}));
 
-  // ── 2. Token balances ────────────────────────────────────────────────────
-  setMsg('Reading token balances (USDC · EURC · USYC)...');
-  const tokBals = await Promise.all(
-    TOKENS.map(async t => ({...t, balance: await tokBal(t.addr, address, t.dec)}))
-  );
+  // ── 2. Build ALL chunk ranges up front ───────────────────────────────────
+  // For each chunk, we need 2 calls (sent + received) → flatten into task list
+  const chunks = [];
+  for (let from = 0; from <= latestBlock; from += CHUNK_SIZE) {
+    chunks.push([from, Math.min(from + CHUNK_SIZE - 1, latestBlock)]);
+  }
+  setMsg(`📡 Scanning ${chunks.length} block ranges in parallel…`);
 
-  // ── 3. Fetch ALL Transfer logs in chunks ─────────────────────────────────
-  // Process each 10k-block chunk sequentially to avoid race conditions.
-  // For each chunk, fetch SENT and RECEIVED logs in parallel.
-  const CHUNK = 10000;
+  // Fire PARALLEL_CHUNKS chunks at a time (each chunk = 2 parallel calls)
   const allLogs = [];
-
-  for (let from = 0; from <= latestBlock; from += CHUNK) {
-    const to = Math.min(from + CHUNK - 1, latestBlock);
-    setMsg(`Scanning blocks ${from.toLocaleString()} – ${to.toLocaleString()} / ${latestBlock.toLocaleString()}\n${allLogs.length} events found so far…`);
-
+  const chunkTasks = chunks.map(([from, to]) => async () => {
     const [sent, recv] = await Promise.all([
       getLogs(from, to, [TRANSFER_TOPIC, topicAddr, null]),
       getLogs(from, to, [TRANSFER_TOPIC, null, topicAddr]),
     ]);
     allLogs.push(...sent, ...recv);
-  }
+    setMsg(`📡 Scanning… ${allLogs.length} events found (${chunks.indexOf([from,to])+1}/${chunks.length} chunks)`);
+  });
+  await pooled(chunkTasks, PARALLEL_CHUNKS);
 
-  // ── 4. Deduplicate logs ──────────────────────────────────────────────────
-  // Key = txHash + logIndex (handles same tx appearing in both sent & recv)
+  // ── 3. Deduplicate ────────────────────────────────────────────────────────
   const logMap = new Map();
   for (const log of allLogs) {
-    const idx = typeof log.logIndex === 'string' ? parseInt(log.logIndex, 16) : (log.logIndex || 0);
+    const idx = parseInt(log.logIndex, 16) || 0;
     const key = log.transactionHash + ':' + idx;
     if (!logMap.has(key)) logMap.set(key, log);
   }
   const uniqueLogs = [...logMap.values()];
-  setMsg(`Found ${uniqueLogs.length} transfer events.\nFetching block timestamps…`);
+  setMsg(`✅ Found ${uniqueLogs.length} transfer events — loading timestamps…`);
 
-  // ── 5. Batch-fetch block timestamps ──────────────────────────────────────
+  // ── 4. Fetch ALL block timestamps in max-parallel batches ─────────────────
+  // Use cache to skip blocks we already fetched
   const blockNums = [...new Set(uniqueLogs.map(l => hex2dec(l.blockNumber)))];
-  const tsMap = {};
+  const uncached  = blockNums.filter(n => !_tsCache[n]);
 
-  for (let i = 0; i < blockNums.length; i += 20) {
-    const batch = blockNums.slice(i, i+20);
-    setMsg(`Loading timestamps: ${i+1} – ${Math.min(i+20, blockNums.length)} of ${blockNums.length} blocks…`);
-    const results = await Promise.all(
-      batch.map(n => rpc('eth_getBlockByNumber', ['0x'+n.toString(16), false]).catch(()=>null))
-    );
-    results.forEach(b => {
-      if (b?.number) tsMap[hex2dec(b.number)] = hex2dec(b.timestamp);
+  if (uncached.length > 0) {
+    setMsg(`⏱ Fetching ${uncached.length} block timestamps (${TS_PARALLEL} at a time)…`);
+    const tsTasks = uncached.map(n => async () => {
+      try {
+        const b = await rpc('eth_getBlockByNumber', ['0x'+n.toString(16), false]);
+        if (b?.number) _tsCache[hex2dec(b.number)] = hex2dec(b.timestamp);
+      } catch {}
     });
+    await pooled(tsTasks, TS_PARALLEL);
   }
 
-  // ── 6. Build transaction list ─────────────────────────────────────────────
-  setMsg('Building transaction list…');
+  // ── 5. Build tx list (pure CPU — instant) ────────────────────────────────
+  setMsg('⚡ Building transaction list…');
   const txMap = new Map();
 
   for (const log of uniqueLogs) {
-    const idx      = typeof log.logIndex === 'string' ? parseInt(log.logIndex,16) : (log.logIndex||0);
+    const idx      = parseInt(log.logIndex, 16) || 0;
     const key      = log.transactionHash + ':' + idx;
     const blockNum = hex2dec(log.blockNumber);
-    const ts       = tsMap[blockNum] || 0;
-
-    // Decode: topics[1]=from(padded 32B), topics[2]=to(padded 32B), data=value
+    const ts       = _tsCache[blockNum] || 0;
     const fromAddr = '0x' + (log.topics[1]||'').slice(-40);
     const toAddr   = '0x' + (log.topics[2]||'').slice(-40);
-
     let rawVal = BigInt(0);
-    try { rawVal = BigInt(log.data||'0x0'); } catch{}
-
-    const token   = TOKENS.find(t => t.addr.toLowerCase() === (log.address||'').toLowerCase());
-    const dec     = token?.dec ?? 6;
-    const sym     = token?.sym ?? 'USDC';
-    const color   = token?.color ?? '#2775ca';
-    const value   = Number(rawVal) / (10**dec);
-    const valStr  = value.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:6});
-    const isSend  = fromAddr.toLowerCase() === addrLow;
-
+    try { rawVal = BigInt(log.data || '0x0'); } catch {}
+    const token  = TOKENS.find(t => t.addr.toLowerCase() === (log.address||'').toLowerCase());
+    const dec    = token?.dec ?? 6;
+    const sym    = token?.sym ?? 'USDC';
+    const color  = token?.color ?? '#2775ca';
+    const value  = Number(rawVal) / (10**dec);
+    const valStr = value.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:6});
+    const isSend = fromAddr.toLowerCase() === addrLow;
     txMap.set(key, {
       hash: log.transactionHash,
       type: isSend ? 'send' : 'receive',
@@ -507,19 +521,17 @@ async function fetchWallet(address) {
     });
   }
 
-  // Sort newest first
   const txList = [...txMap.values()].sort((a,b) => (b.ts||0)-(a.ts||0));
 
-  // ── 7. Analytics ─────────────────────────────────────────────────────────
-  const typeCounts = {send:0,receive:0,contract:0,approve:0,gm:0};
+  // ── 6. Analytics (CPU only — instant) ────────────────────────────────────
+  const typeCounts = {send:0, receive:0, contract:0, approve:0, gm:0};
   let totalSent=0, totalRecv=0;
   txList.forEach(tx => {
-    typeCounts[tx.type] = (typeCounts[tx.type]||0) + 1;
+    typeCounts[tx.type] = (typeCounts[tx.type]||0)+1;
     if (tx.type==='send')    totalSent += tx.value;
     if (tx.type==='receive') totalRecv += tx.value;
   });
 
-  // 30-day volume
   const volMap={}, volLabels=[], volData=[];
   for (let i=29;i>=0;i--) {
     const d=new Date(); d.setDate(d.getDate()-i);
@@ -527,29 +539,28 @@ async function fetchWallet(address) {
     volMap[k]=0;
     volLabels.push(d.toLocaleDateString('en',{month:'short',day:'numeric'}));
   }
-  txList.forEach(tx=>{
-    if(!tx.ts) return;
-    const k=new Date(tx.ts*1000).toISOString().slice(0,10);
-    if(k in volMap) volMap[k]++;
+  txList.forEach(tx => {
+    if (!tx.ts) return;
+    const k = new Date(tx.ts*1000).toISOString().slice(0,10);
+    if (k in volMap) volMap[k]++;
   });
-  Object.values(volMap).forEach(v=>volData.push(v));
+  Object.values(volMap).forEach(v => volData.push(v));
 
-  // Heatmap
-  const heatmap=Array(168).fill(0);
-  const nowSec=Math.floor(Date.now()/1000);
-  txList.forEach(tx=>{
-    if(!tx.ts) return;
-    const sec=nowSec-tx.ts;
-    if(sec>=0&&sec<7*86400){
-      const day=Math.min(6,Math.floor(sec/86400));
-      const hr=new Date(tx.ts*1000).getHours();
-      const idx=(6-day)*24+hr;
-      if(idx>=0&&idx<168) heatmap[idx]=Math.min(4,heatmap[idx]+1);
+  const heatmap = Array(168).fill(0);
+  const nowSec  = Math.floor(Date.now()/1000);
+  txList.forEach(tx => {
+    if (!tx.ts) return;
+    const sec = nowSec - tx.ts;
+    if (sec >= 0 && sec < 7*86400) {
+      const day = Math.min(6, Math.floor(sec/86400));
+      const hr  = new Date(tx.ts*1000).getHours();
+      const idx = (6-day)*24+hr;
+      if (idx>=0&&idx<168) heatmap[idx] = Math.min(4, heatmap[idx]+1);
     }
   });
 
-  const lastActive = txList.length>0 ? ago(txList[0].ts) : null;
-  setMsg(`Done! ${txList.length} transactions loaded.`);
+  const lastActive = txList.length > 0 ? ago(txList[0].ts) : null;
+  setMsg(`🎉 Done! ${txList.length} transactions loaded.`);
 
   return {
     address, nativeBal, nonce, tokBals, txList,
